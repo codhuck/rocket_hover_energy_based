@@ -1,0 +1,18 @@
+{
+  "final_x": -0.006336499806409417,
+  "final_y": 7.984957098762321,
+  "final_phi_deg": -0.009603321205736624,
+  "final_speed": 0.011864447024750886,
+  "final_tracking_error": 0.016322993213354044,
+  "max_tracking_error": 7.280109889280518,
+  "max_abs_phi_deg": 12.000000000000002,
+  "max_abs_delta_deg": 1.329731575681856,
+  "fuel_used": 0.12645208547089237,
+  "min_mass": 1.4735479145291077,
+  "hover_alpha_initial": 0.654,
+  "hover_alpha_final": 0.6023127100637727,
+  "params_l_cp": 0.6090566037735848,
+  "params_J_const": 0.11831382075471698,
+  "F_max": 24.0,
+  "simulation_time": 10.0
+}

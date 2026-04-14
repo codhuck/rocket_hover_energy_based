@@ -1,0 +1,45 @@
+project:
+  name: project_1_lyapunov_control_planar_tvc_rocket
+  description: Planar TVC rocket hover stabilization with Lyapunov-based control
+
+target:
+  x_d: 0.0
+  y_d: 8.0
+
+experiment:
+  t_final: 10.0
+  max_step: 0.02
+  sample_count: 1201
+  fuel_epsilon: 1.0e-4
+  rng_seed: 0
+
+initial_state:
+  x: -2.0
+  y: 1.0
+  phi_deg: 12.0
+  vx: 0.5
+  vy: 0.0
+  omega_deg_s: -5.0
+  mass: 1.60
+
+rocket:
+  g: 9.81
+  beta_drag: 0.08
+  m_dry: 1.05
+  m_dot_max: 0.02
+  v_e: 1200.0
+  h_dry: 0.58
+  h_tank: 0.72
+  L_tank: 0.42
+  J_dry_cm: 0.11
+  delta_max_deg: 15.0
+  alpha_min: 0.20
+
+controller:
+  k_px: 0.45
+  k_dx: 1.30
+  k_py: 0.80
+  k_dy: 1.80
+  k_phi: 18.0
+  k_omega: 7.0
+  phi_des_limit_deg: 22.0

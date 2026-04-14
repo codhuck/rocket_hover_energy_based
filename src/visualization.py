@@ -1,0 +1,446 @@
+from __future__ import annotations
+
+from pathlib import Path
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import subprocess
+import tempfile
+
+from .simulation import SimulationResult
+
+
+PALETTE = {
+    'bg': '#0d0f1a',
+    'panel': '#121629',
+    'grid': '#242b45',
+    'tick': '#6f7aa8',
+    'title': '#d7dff7',
+    'label': '#a9b4da',
+    'body': '#d9dde7',
+    'body_edge': '#f6f7fb',
+    'stripe': '#d53c33',
+    'window': '#7fc8ff',
+    'fin': '#9aa3ba',
+    'nozzle': '#6e768a',
+    'flame_outer': '#ff5a36',
+    'flame_mid': '#ffb703',
+    'flame_core': '#fff2a8',
+    'trail': '#79a8ff',
+    'target': '#5ef38c',
+    'ground': '#1b3a1f',
+    'ground_line': '#46a758',
+    'crosshair': '#ffffff',
+    'phi': '#5aa0ff',
+    'omega': '#ffb14e',
+    'error': '#61d095',
+    'alpha': '#cf9fff',
+    'text': '#f2f5ff',
+}
+
+
+def rot2d(phi: float) -> np.ndarray:
+    c = math.cos(phi)
+    s = math.sin(phi)
+    return np.array([[c, -s], [s, c]])
+
+
+def body_to_world(points: np.ndarray, x: float, y: float, phi: float) -> np.ndarray:
+    return (rot2d(phi) @ points.T).T + np.array([x, y])
+
+
+def draw_rocket(ax, x: float, y: float, phi: float, delta: float, alpha: float, trail_x, trail_y, target_x: float, target_y: float, viewport_hw: float = 4.5, viewport_hh: float = 5.8):
+    ax.clear()
+    ax.set_facecolor(PALETTE['panel'])
+    ax.grid(color=PALETTE['grid'], linewidth=0.6, alpha=0.7)
+    ax.tick_params(colors=PALETTE['tick'], labelsize=8)
+    for spine in ax.spines.values():
+        spine.set_edgecolor(PALETTE['grid'])
+
+    ax.set_xlim(x - viewport_hw, x + viewport_hw)
+    ax.set_ylim(y - viewport_hh, y + viewport_hh)
+    ax.set_aspect('equal', adjustable='box')
+    ax.set_xlabel('x [m]', color=PALETTE['label'], fontsize=8)
+    ax.set_ylabel('y [m]', color=PALETTE['label'], fontsize=8)
+    ax.set_title('Rocket-following camera', color=PALETTE['title'], fontsize=9, pad=6)
+
+    ax.axhline(0.0, color=PALETTE['ground_line'], lw=1.4, zorder=0)
+    ax.fill_between([x - 100, x + 100], -100, 0.0, color=PALETTE['ground'], alpha=0.6, zorder=0)
+
+    ax.plot(trail_x, trail_y, color=PALETTE['trail'], lw=1.6, alpha=0.85, zorder=1, label='trajectory')
+    ax.scatter([target_x], [target_y], marker='x', s=80, color=PALETTE['target'], zorder=4, label='hover target')
+
+    body_h = 1.55
+    body_w = 0.34
+    half_h = body_h / 2.0
+    half_w = body_w / 2.0
+
+    body_pts = np.array([
+        [-half_w, -half_h],
+        [ half_w, -half_h],
+        [ half_w,  half_h * 0.64],
+        [ 0.0,     half_h],
+        [-half_w,  half_h * 0.64],
+    ])
+    stripe_pts = np.array([
+        [-half_w * 0.85, -0.10],
+        [ half_w * 0.85, -0.10],
+        [ half_w * 0.85,  0.16],
+        [-half_w * 0.85,  0.16],
+    ])
+    window_pts = np.array([
+        [-0.08, 0.28],
+        [ 0.08, 0.28],
+        [ 0.10, 0.48],
+        [ 0.00, 0.58],
+        [-0.10, 0.48],
+    ])
+    fin_left = np.array([
+        [-half_w, -0.32],
+        [-half_w - 0.18, -0.60],
+        [-half_w * 0.25, -0.52],
+    ])
+    fin_right = fin_left.copy()
+    fin_right[:, 0] *= -1.0
+    nozzle_pts = np.array([
+        [-0.09, -half_h],
+        [ 0.09, -half_h],
+        [ 0.05, -half_h - 0.16],
+        [-0.05, -half_h - 0.16],
+    ])
+
+    for pts, fc, ec, lw, zo in [
+        (body_pts, PALETTE['body'], PALETTE['body_edge'], 1.6, 7),
+        (stripe_pts, PALETTE['stripe'], PALETTE['stripe'], 1.0, 8),
+        (window_pts, PALETTE['window'], PALETTE['body_edge'], 0.9, 8),
+        (fin_left, PALETTE['fin'], PALETTE['body_edge'], 1.0, 6),
+        (fin_right, PALETTE['fin'], PALETTE['body_edge'], 1.0, 6),
+        (nozzle_pts, PALETTE['nozzle'], PALETTE['body_edge'], 1.0, 6),
+    ]:
+        world = body_to_world(pts, x, y, phi)
+        ax.add_patch(mpatches.Polygon(world, closed=True, facecolor=fc, edgecolor=ec, lw=lw, zorder=zo))
+
+    ax.plot([x - viewport_hw, x + viewport_hw], [y, y], color=PALETTE['crosshair'], lw=0.35, alpha=0.15, zorder=1)
+    ax.plot([x, x], [y - viewport_hh, y + viewport_hh], color=PALETTE['crosshair'], lw=0.35, alpha=0.15, zorder=1)
+
+    nozzle_center = body_to_world(np.array([[0.0, -half_h - 0.14]]), x, y, phi)[0]
+    thrust_angle = phi + delta
+    flame_scale = max(alpha, 0.02)
+    lengths = [1.55 * flame_scale, 1.0 * flame_scale, 0.55 * flame_scale]
+    widths = [0.17, 0.11, 0.06]
+    colors = [PALETTE['flame_outer'], PALETTE['flame_mid'], PALETTE['flame_core']]
+    for length, width, color in zip(lengths, widths, colors):
+        flame_local = np.array([
+            [-width, 0.0],
+            [ width, 0.0],
+            [ 0.0, -length],
+        ])
+        flame_world = body_to_world(flame_local, nozzle_center[0], nozzle_center[1], thrust_angle)
+        ax.add_patch(mpatches.Polygon(flame_world, closed=True, facecolor=color, edgecolor='none', alpha=0.85, zorder=3))
+
+    arc_r = 0.42
+    arc_theta = np.linspace(phi + math.pi, thrust_angle + math.pi, 25)
+    ax.plot(
+        nozzle_center[0] + arc_r * np.sin(arc_theta),
+        nozzle_center[1] - arc_r * np.cos(arc_theta),
+        color='#ff7aa8', lw=1.3, alpha=0.9, zorder=9,
+    )
+
+    ax.legend(loc='lower right', fontsize=7, facecolor=PALETTE['panel'], edgecolor=PALETTE['grid'], labelcolor=PALETTE['label'])
+
+
+def _decorate_timeseries_axes(ax):
+    ax.set_facecolor(PALETTE['panel'])
+    ax.grid(color=PALETTE['grid'], linewidth=0.6, alpha=0.7)
+    ax.tick_params(colors=PALETTE['tick'], labelsize=8)
+    for spine in ax.spines.values():
+        spine.set_edgecolor(PALETTE['grid'])
+
+
+def save_all_figures(result: SimulationResult, output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    t = result.t
+    state = result.state
+    controls = result.controls
+    derived = result.derived
+    target = result.target
+
+    fig, axes = plt.subplots(3, 1, figsize=(9, 10), sharex=True)
+    for ax in axes:
+        _decorate_timeseries_axes(ax)
+    axes[0].plot(t, state[:, 0], label='x(t)', color=PALETTE['phi'])
+    axes[0].plot(t, derived['target_x'], '--', label='x_d', color=PALETTE['target'])
+    axes[0].plot(t, state[:, 1], label='y(t)', color=PALETTE['omega'])
+    axes[0].plot(t, derived['target_y'], '--', label='y_d', color=PALETTE['error'])
+    axes[0].set_ylabel('Position [m]', color=PALETTE['label'])
+    axes[0].set_title('State trajectories: the rocket converges to the hover target', color=PALETTE['title'], fontsize=10)
+    axes[0].legend(fontsize=8)
+
+    axes[1].plot(t, np.degrees(state[:, 2]), label='phi(t)', color=PALETTE['phi'])
+    axes[1].plot(t, np.degrees(controls['phi_des']), '--', label='phi_des(t)', color=PALETTE['target'])
+    axes[1].plot(t, np.degrees(controls['delta']), label='delta(t)', color=PALETTE['alpha'])
+    axes[1].set_ylabel('Angle [deg]', color=PALETTE['label'])
+    axes[1].set_title('Attitude and gimbal history: the inner loop remains well within authority', color=PALETTE['title'], fontsize=10)
+    axes[1].legend(fontsize=8)
+
+    axes[2].plot(t, controls['alpha'], label='alpha(t)', color=PALETTE['alpha'])
+    axes[2].plot(t, derived['speed'], label='||v||', color=PALETTE['omega'])
+    axes[2].plot(t, derived['tracking_error'], label='position error', color=PALETTE['error'])
+    axes[2].set_xlabel('Time [s]', color=PALETTE['label'])
+    axes[2].set_ylabel('Magnitude', color=PALETTE['label'])
+    axes[2].set_title('Control effort and convergence indicators', color=PALETTE['title'], fontsize=10)
+    axes[2].legend(fontsize=8)
+
+    fig.tight_layout()
+    fig.savefig(output_dir / 'state_trajectories.png', dpi=190, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(8.5, 5.2), facecolor=PALETTE['bg'])
+    _decorate_timeseries_axes(ax)
+    ax.plot(t, np.degrees(state[:, 2]), label='phi(t)', color=PALETTE['phi'])
+    ax.plot(t, np.degrees(controls['phi_des']), '--', label='phi_des(t)', color=PALETTE['target'])
+    ax.plot(t, np.degrees(controls['delta']), label='delta(t)', color=PALETTE['alpha'])
+    ax.axhline(np.degrees(result.params.delta_max), color='#ff7aa8', ls=':', lw=1.0, label='±delta_max')
+    ax.axhline(-np.degrees(result.params.delta_max), color='#ff7aa8', ls=':', lw=1.0)
+    ax.set_title('Attitude and gimbal command', color=PALETTE['title'], fontsize=10)
+    ax.set_xlabel('Time [s]', color=PALETTE['label'])
+    ax.set_ylabel('Angle [deg]', color=PALETTE['label'])
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(output_dir / 'attitude_and_gimbal.png', dpi=190, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(8.5, 5.2), facecolor=PALETTE['bg'])
+    _decorate_timeseries_axes(ax)
+    ax.plot(t, controls['alpha'], label='Throttle alpha', color=PALETTE['alpha'])
+    ax.plot(t, derived['speed'], label='Speed [m/s]', color=PALETTE['omega'])
+    ax.plot(t, derived['tracking_error'], label='Position error [m]', color=PALETTE['error'])
+    ax.set_title('Control effort and hover error', color=PALETTE['title'], fontsize=10)
+    ax.set_xlabel('Time [s]', color=PALETTE['label'])
+    ax.set_ylabel('Magnitude', color=PALETTE['label'])
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(output_dir / 'control_and_error.png', dpi=190, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(6.8, 8.4), facecolor=PALETTE['bg'])
+    _decorate_timeseries_axes(ax)
+    ax.plot(state[:, 0], state[:, 1], color=PALETTE['trail'], lw=2.0, label='trajectory')
+    ax.scatter([state[0, 0]], [state[0, 1]], s=60, color=PALETTE['omega'], label='start')
+    ax.scatter([state[-1, 0]], [state[-1, 1]], s=60, color=PALETTE['phi'], label='end')
+    ax.scatter([target['x_d']], [target['y_d']], marker='x', s=90, color=PALETTE['target'], label='target')
+    ax.set_title('Planar trajectory: the path bends smoothly into hover', color=PALETTE['title'], fontsize=10)
+    ax.set_xlabel('x [m]', color=PALETTE['label'])
+    ax.set_ylabel('y [m]', color=PALETTE['label'])
+    ax.set_aspect('equal', adjustable='box')
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(output_dir / 'planar_trajectory.png', dpi=190, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
+def _make_animation_figure():
+    fig = plt.figure(figsize=(11.2, 6.4), facecolor=PALETTE['bg'])
+    gs = fig.add_gridspec(3, 2, width_ratios=[1.25, 1.0], hspace=0.44, wspace=0.28, left=0.05, right=0.97, top=0.94, bottom=0.08)
+    ax_scene = fig.add_subplot(gs[:, 0])
+    ax_phi = fig.add_subplot(gs[0, 1])
+    ax_omega = fig.add_subplot(gs[1, 1])
+    ax_err = fig.add_subplot(gs[2, 1])
+    for ax in (ax_phi, ax_omega, ax_err):
+        _decorate_timeseries_axes(ax)
+    return fig, ax_scene, ax_phi, ax_omega, ax_err
+
+
+def _render_animation_frame(result: SimulationResult, idx: int, fig, ax_scene, ax_phi, ax_omega, ax_err):
+    t = result.t
+    state = result.state
+    controls = result.controls
+    derived = result.derived
+    target = result.target
+
+    x, y, phi, vx, vy, omega, mass = state[idx]
+    alpha = controls['alpha'][idx]
+    delta = controls['delta'][idx]
+
+    draw_rocket(
+        ax_scene,
+        x=float(x),
+        y=float(y),
+        phi=float(phi),
+        delta=float(delta),
+        alpha=float(alpha),
+        trail_x=state[: idx + 1, 0],
+        trail_y=state[: idx + 1, 1],
+        target_x=float(target['x_d']),
+        target_y=float(target['y_d']),
+    )
+    info = (
+        f"t = {t[idx]:5.2f} s\n"
+        f"x = {x:+6.2f} m\n"
+        f"y = {y:+6.2f} m\n"
+        f"phi = {np.degrees(phi):+6.2f} deg\n"
+        f"delta = {np.degrees(delta):+5.2f} deg\n"
+        f"alpha = {alpha:0.3f}\n"
+        f"|e_p| = {derived['tracking_error'][idx]:.3f} m"
+    )
+    ax_scene.text(
+        0.02,
+        0.98,
+        info,
+        transform=ax_scene.transAxes,
+        va='top',
+        color=PALETTE['text'],
+        fontsize=8.5,
+        fontfamily='monospace',
+        bbox=dict(boxstyle='round,pad=0.35', fc=PALETTE['bg'], ec=PALETTE['grid'], alpha=0.90),
+    )
+
+    ax_phi.clear(); _decorate_timeseries_axes(ax_phi)
+    ax_phi.plot(t, np.degrees(state[:, 2]), color=PALETTE['phi'], alpha=0.18, lw=0.9)
+    ax_phi.plot(t[: idx + 1], np.degrees(state[: idx + 1, 2]), color=PALETTE['phi'], lw=2.2)
+    ax_phi.plot(t, np.degrees(controls['phi_des']), color=PALETTE['target'], alpha=0.18, lw=0.9, ls='--')
+    ax_phi.plot(t[: idx + 1], np.degrees(controls['phi_des'][: idx + 1]), color=PALETTE['target'], lw=1.8, ls='--')
+    ax_phi.scatter([t[idx]], [np.degrees(state[idx, 2])], color=PALETTE['phi'], s=24)
+    ax_phi.set_title('Pitch angle and virtual pitch command', color=PALETTE['title'], fontsize=9)
+    ax_phi.set_ylabel('Angle [deg]', color=PALETTE['label'])
+
+    ax_omega.clear(); _decorate_timeseries_axes(ax_omega)
+    ax_omega.plot(t, np.degrees(state[:, 5]), color=PALETTE['omega'], alpha=0.18, lw=0.9)
+    ax_omega.plot(t[: idx + 1], np.degrees(state[: idx + 1, 5]), color=PALETTE['omega'], lw=2.2)
+    ax_omega.plot(t, np.degrees(controls['delta']), color=PALETTE['alpha'], alpha=0.18, lw=0.9)
+    ax_omega.plot(t[: idx + 1], np.degrees(controls['delta'][: idx + 1]), color=PALETTE['alpha'], lw=1.8)
+    ax_omega.scatter([t[idx]], [np.degrees(state[idx, 5])], color=PALETTE['omega'], s=24)
+    ax_omega.set_title('Angular rate and gimbal activity', color=PALETTE['title'], fontsize=9)
+    ax_omega.set_ylabel('Angle [deg] / rate [deg/s]', color=PALETTE['label'])
+
+    ax_err.clear(); _decorate_timeseries_axes(ax_err)
+    ax_err.plot(t, derived['tracking_error'], color=PALETTE['error'], alpha=0.18, lw=0.9)
+    ax_err.plot(t[: idx + 1], derived['tracking_error'][: idx + 1], color=PALETTE['error'], lw=2.2)
+    ax_err.plot(t, controls['alpha'], color=PALETTE['alpha'], alpha=0.18, lw=0.9)
+    ax_err.plot(t[: idx + 1], controls['alpha'][: idx + 1], color=PALETTE['alpha'], lw=1.8)
+    ax_err.scatter([t[idx]], [derived['tracking_error'][idx]], color=PALETTE['error'], s=24)
+    ax_err.set_title('Position error and throttle command', color=PALETTE['title'], fontsize=9)
+    ax_err.set_xlabel('Time [s]', color=PALETTE['label'])
+    ax_err.set_ylabel('Magnitude', color=PALETTE['label'])
+
+    fig.suptitle('Planar TVC Rocket — Lyapunov Hover Control', color=PALETTE['text'], fontsize=12)
+    fig.canvas.draw()
+    width, height = fig.canvas.get_width_height()
+    rgba = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8).reshape(height, width, 4)
+    return rgba[:, :, :3].copy()
+
+
+def save_preview_figure(result: SimulationResult, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    preview_idx = min(len(result.t) - 1, len(result.t) // 3)
+    fig, ax_scene, _, _, _ = _make_animation_figure()
+    plt.close(fig)
+    fig = plt.figure(figsize=(7.4, 8.2), facecolor=PALETTE['bg'])
+    ax = fig.add_subplot(111)
+    draw_rocket(
+        ax,
+        x=float(result.state[preview_idx, 0]),
+        y=float(result.state[preview_idx, 1]),
+        phi=float(result.state[preview_idx, 2]),
+        delta=float(result.controls['delta'][preview_idx]),
+        alpha=float(result.controls['alpha'][preview_idx]),
+        trail_x=result.state[: preview_idx + 1, 0],
+        trail_y=result.state[: preview_idx + 1, 1],
+        target_x=float(result.target['x_d']),
+        target_y=float(result.target['y_d']),
+    )
+    ax.set_title('Visualisation preview: tracked hover with a rocket-centred camera', color=PALETTE['title'], fontsize=10)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=190, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
+def save_animation(result: SimulationResult, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    t = result.t
+    state = result.state
+    controls = result.controls
+    derived = result.derived
+    target = result.target
+
+    sample_dt = float(np.mean(np.diff(t))) if len(t) > 1 else 0.05
+
+    target_fps = 20
+    stride = max(1, int(round(1.0 / (target_fps * sample_dt))))
+    fps = target_fps
+
+    fig = plt.figure(figsize=(7.2, 8.0), facecolor=PALETTE['bg'])
+    ax = fig.add_subplot(111)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            frame_idx = 0
+            for idx in range(0, len(t), stride):
+                draw_rocket(
+                    ax,
+                    x=float(state[idx, 0]),
+                    y=float(state[idx, 1]),
+                    phi=float(state[idx, 2]),
+                    delta=float(controls['delta'][idx]),
+                    alpha=float(controls['alpha'][idx]),
+                    trail_x=state[: idx + 1, 0],
+                    trail_y=state[: idx + 1, 1],
+                    target_x=float(target['x_d']),
+                    target_y=float(target['y_d']),
+                )
+                info = (
+                    f"t = {t[idx]:5.2f} s\n"
+                    f"phi = {np.degrees(state[idx, 2]):+6.2f} deg\n"
+                    f"delta = {np.degrees(controls['delta'][idx]):+5.2f} deg\n"
+                    f"alpha = {controls['alpha'][idx]:0.3f}\n"
+                    f"speed = {derived['speed'][idx]:.3f} m/s\n"
+                    f"|e_p| = {derived['tracking_error'][idx]:.3f} m"
+                )
+                ax.text(
+                    0.02, 0.98, info, transform=ax.transAxes, va='top',
+                    color=PALETTE['text'], fontsize=8.5, fontfamily='monospace',
+                    bbox=dict(boxstyle='round,pad=0.35', fc=PALETTE['bg'], ec=PALETTE['grid'], alpha=0.90),
+                )
+                fig.suptitle('Planar TVC Rocket — Real-Time Hover Animation', color=PALETTE['text'], fontsize=11)
+                fig.savefig(tmpdir_path / f"frame_{frame_idx:05d}.png", dpi=80, facecolor=fig.get_facecolor())
+                frame_idx += 1
+
+            if (len(t) - 1) % stride != 0:
+                idx = len(t) - 1
+                draw_rocket(
+                    ax,
+                    x=float(state[idx, 0]),
+                    y=float(state[idx, 1]),
+                    phi=float(state[idx, 2]),
+                    delta=float(controls['delta'][idx]),
+                    alpha=float(controls['alpha'][idx]),
+                    trail_x=state[: idx + 1, 0],
+                    trail_y=state[: idx + 1, 1],
+                    target_x=float(target['x_d']),
+                    target_y=float(target['y_d']),
+                )
+                info = (
+                    f"t = {t[idx]:5.2f} s\n"
+                    f"phi = {np.degrees(state[idx, 2]):+6.2f} deg\n"
+                    f"delta = {np.degrees(controls['delta'][idx]):+5.2f} deg\n"
+                    f"alpha = {controls['alpha'][idx]:0.3f}\n"
+                    f"speed = {derived['speed'][idx]:.3f} m/s\n"
+                    f"|e_p| = {derived['tracking_error'][idx]:.3f} m"
+                )
+                ax.text(
+                    0.02, 0.98, info, transform=ax.transAxes, va='top',
+                    color=PALETTE['text'], fontsize=8.5, fontfamily='monospace',
+                    bbox=dict(boxstyle='round,pad=0.35', fc=PALETTE['bg'], ec=PALETTE['grid'], alpha=0.90),
+                )
+                fig.suptitle('Planar TVC Rocket — Real-Time Hover Animation', color=PALETTE['text'], fontsize=11)
+                fig.savefig(tmpdir_path / f"frame_{frame_idx:05d}.png", dpi=80, facecolor=fig.get_facecolor())
+
+            cmd = [
+                'ffmpeg', '-y', '-loglevel', 'error', '-framerate', str(fps),
+                '-i', str(tmpdir_path / 'frame_%05d.png'),
+                '-pix_fmt', 'yuv420p', '-vcodec', 'libx264', str(output_path),
+            ]
+            subprocess.run(cmd, check=True)
+    finally:
+        plt.close(fig)
