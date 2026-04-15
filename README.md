@@ -162,11 +162,11 @@ $$
 From these terms,
 
 $$
-T_{des} = \sqrt{A_x^2 + A_y^2}, \qquad \phi_{des} = \operatorname{atan2}(A_x, A_y)
+T_{des} = \sqrt{A_x^2 + A_y^2}, \qquad \phi_{des} = \text{atan2}(A_x, A_y)
 $$
 
 $$
-\alpha = \operatorname{clip}\left(\frac{m T_{des}}{F_{max}}, \alpha_{min}, 1\right)
+\alpha = \text{clip}\left(\frac{m T_{des}}{F_{max}}, \alpha_{min}, 1\right)
 $$
 
 The desired pitch is clipped to `phi_des_limit_deg` from the configuration file.
@@ -175,7 +175,7 @@ The desired pitch is clipped to `phi_des_limit_deg` from the configuration file.
 The inner loop uses the wrapped attitude error
 
 $$
-e_\phi = \operatorname{wrap}(\phi - \phi_{des})
+e_\phi = \text{wrap}(\phi - \phi_{des})
 $$
 
 The gimbal command is computed from
