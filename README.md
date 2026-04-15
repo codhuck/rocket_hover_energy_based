@@ -162,62 +162,73 @@ $$
 From these terms,
 
 $$
-T_{des} = \sqrt{A_x^2 + A_y^2}, \qquad \phi_{des} = \text{atan2}(A_x, A_y)
+T_{des} = \sqrt{A_x^2 + A_y^2}, \qquad \phi_{des} = \mathrm{atan2}(A_x, A_y)
 $$
 
 $$
-\alpha = \text{clip}\left(\frac{m T_{des}}{F_{max}}, \alpha_{min}, 1\right)
+\alpha = \mathrm{clip}\left(\frac{m T_{des}}{F_{max}}, \alpha_{min}, 1\right)
 $$
 
 The desired pitch is clipped to `phi_des_limit_deg` from the configuration file.
 
 ### Inner-loop Lyapunov attitude law
+
 The inner loop uses the wrapped attitude error
 
 $$
-e_\phi = \text{wrap}(\phi - \phi_{des})
+e_\phi = \mathrm{wrap}(\phi - \phi_{des})
 $$
 
-The gimbal command is computed from
+The Lyapunov function candidate for the attitude subsystem is
+
+$$
+V = \frac{1}{2} k_\phi e_\phi^2 + \frac{1}{2} \dot{\phi}^2
+$$
+
+Taking the time derivative and requiring $\dot{V} \leq 0$ yields the gimbal command:
 
 $$
 \sin(\delta) = \frac{J_{const}}{\alpha F_{max} l_{cp}}\left(k_\phi e_\phi + k_\omega \dot{\phi}\right)
 $$
 
-followed by an `arcsin` and a hard saturation to `[-delta_max, delta_max]`.
+$$
+\delta = \arcsin\left(\mathrm{clamp}\left(\frac{J_{const}}{\alpha F_{max} l_{cp}}\left(k_\phi e_\phi + k_\omega \dot{\phi}\right),\ -1,\ 1\right)\right)
+$$
 
-For a more detailed mathematical derivation, see [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
+followed by a hard saturation to `[-delta_max, delta_max]`. This gives $\dot{V} = -k_\omega \dot{\phi}^2 \leq 0$, and by LaSalle's invariance principle all trajectories converge to $(\phi, \dot{\phi}) = (0, 0)$.
+
+For the full derivation see [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
 
 ### Cross-term Lyapunov attitude law
-For the cross-term regulator, the Lyapunov candidate is
+
+For the cross-term regulator, the Lyapunov candidate adds a cross term:
 
 $$
-V = \frac{1}{2}k_\phi e_\phi^2 + \frac{1}{2}\dot{\phi}^2 + c\,e_\phi \dot{\phi}
+V = \frac{1}{2}k_\phi e_\phi^2 + \frac{1}{2}\dot{\phi}^2 + c\, e_\phi \dot{\phi}
 $$
 
-with control law
+Taking $\dot{V} \leq 0$ with this candidate yields:
 
 $$
-n = k_\phi e_\phi \omega + (c + k_\omega)\omega^2 + k_c e_\phi^2
+n = k_\phi e_\phi \dot{\phi} + (c + k_\omega)\dot{\phi}^2 + k_c e_\phi^2
 $$
 
 $$
-d = \omega + c e_\phi
+d = \dot{\phi} + c\, e_\phi
 $$
 
 $$
 \sin(\delta) = \frac{J_{const}}{\alpha F_{max} l_{cp}} \cdot \frac{n}{d}
 $$
 
-and the same `arcsin` and hard saturation to `[-delta_max, delta_max]`.
-If `abs(d) < eps`, the implementation falls back to the PD law for numerical robustness.
+followed by the same `arcsin` and hard saturation to `[-delta_max, delta_max]`. If `|d| < eps`, the implementation falls back to the PD law for numerical robustness.
 
 ### Stability interpretation
 - The **outer loop** makes the translational error behave like a damped second-order system.
-- The **inner loop** drives the rocket pitch toward the commanded pitch and damps angular motion.
+- The **inner loop** drives the rocket pitch toward the commanded pitch and damps angular motion via a Lyapunov argument guaranteeing $\dot{V} \leq 0$.
 - Translational drag is not cancelled, so it contributes extra dissipation.
 
-The code intentionally implements the simplified Project 1 model, not a fully parameter-varying rocket. A longer derivation note is included in `README-derivation-lyapunov.md`.
+The code intentionally implements the simplified Project 1 model, not a fully parameter-varying rocket. A longer derivation note is included in [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
 
 ## 4. Method Description
 ### Control pipeline
