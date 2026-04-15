@@ -142,50 +142,24 @@ The code computes `F_max = m_dot_max * v_e` from the mass-flow rate and effectiv
 When the dry mass is reached, the thrust is set to zero and further fuel depletion stops.
 
 ## 3. Mathematical Specification
-### Outer-loop virtual thrust law
-Define the position errors
+
+The controller stabilizes attitude only. The throttle is fixed at the hover value $\alpha = \alpha_{hover}$ and is not a control variable. The sole control input is the gimbal angle $\delta$.
+
+### Lyapunov attitude law
+
+The attitude error and angular rate are:
 
 $$
-e_x = x - x_d, \qquad e_y = y - y_d
+e_\phi = \mathrm{wrap}(\phi - \phi_{target}), \qquad \dot{\phi} = \omega
 $$
 
-The outer loop commands the desired specific thrust components
-
-$$
-A_x = -k_{px} e_x - k_{dx}\dot{x}
-$$
-
-$$
-A_y = g - k_{py} e_y - k_{dy}\dot{y}
-$$
-
-From these terms,
-
-$$
-T_{des} = \sqrt{A_x^2 + A_y^2}, \qquad \phi_{des} = \mathrm{atan2}(A_x, A_y)
-$$
-
-$$
-\alpha = \mathrm{clip}\left(\frac{m T_{des}}{F_{max}}, \alpha_{min}, 1\right)
-$$
-
-The desired pitch is clipped to `phi_des_limit_deg` from the configuration file.
-
-### Inner-loop Lyapunov attitude law
-
-The inner loop uses the wrapped attitude error
-
-$$
-e_\phi = \mathrm{wrap}(\phi - \phi_{des})
-$$
-
-The Lyapunov function candidate for the attitude subsystem is
+The Lyapunov function candidate is:
 
 $$
 V = \frac{1}{2} k_\phi e_\phi^2 + \frac{1}{2} \dot{\phi}^2
 $$
 
-Taking the time derivative and requiring $\dot{V} \leq 0$ yields the gimbal command:
+Taking the time derivative along the attitude dynamics and requiring $\dot{V} \leq 0$ yields the gimbal command:
 
 $$
 \sin(\delta) = \frac{J_{const}}{\alpha F_{max} l_{cp}}\left(k_\phi e_\phi + k_\omega \dot{\phi}\right)
@@ -224,9 +198,9 @@ $$
 followed by the same `arcsin` and hard saturation to `[-delta_max, delta_max]`. If `|d| < eps`, the implementation falls back to the PD law for numerical robustness.
 
 ### Stability interpretation
-- The **outer loop** makes the translational error behave like a damped second-order system.
-- The **inner loop** drives the rocket pitch toward the commanded pitch and damps angular motion via a Lyapunov argument guaranteeing $\dot{V} \leq 0$.
-- Translational drag is not cancelled, so it contributes extra dissipation.
+- The controller drives the rocket pitch toward $\phi_{target} = 0$ and damps angular motion via a Lyapunov argument guaranteeing $\dot{V} \leq 0$.
+- Translational states $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled.
+- Translational drag is not cancelled, so it contributes extra passive dissipation.
 
 The code intentionally implements the simplified Project 1 model, not a fully parameter-varying rocket. A longer derivation note is included in [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
 
@@ -234,16 +208,13 @@ The code intentionally implements the simplified Project 1 model, not a fully pa
 ### Control pipeline
 At every integration step the code performs the following pipeline:
 1. read the current state `(x, y, phi, vx, vy, omega, mass)`;
-2. compute `e_x`, `e_y`, `A_x`, and `A_y`;
-3. compute the desired pitch `phi_des` and desired thrust magnitude `T_des`;
-4. compute the throttle `alpha`;
-5. wrap the attitude error `e_phi = wrap(phi - phi_des)`;
-6. compute the gimbal angle `delta` from the inner-loop law;
-7. propagate the nonlinear dynamics with `solve_ivp`;
-8. post-process the state history into plots, an animation, and summary metrics.
+2. compute the attitude error `e_phi = wrap(phi - phi_target)`;
+3. compute the gimbal angle `delta` from the Lyapunov attitude law;
+4. propagate the nonlinear dynamics with `solve_ivp`;
+5. post-process the state history into plots, an animation, and summary metrics.
 
 ### Why the controller works in practice
-The outer loop steers the thrust vector toward the hover point while damping velocity. The inner loop is tuned sufficiently faster than the position loop, so the commanded pitch is tracked without large gimbal excursions.
+The Lyapunov attitude law drives `phi` and `omega` to zero by construction — $\dot{V} \leq 0$ is guaranteed for all $k_\phi > 0$, $k_\omega > 0$. Translational states evolve freely under the fixed hover throttle.
 
 ## 5. Experimental Setup
 ### Initial condition
@@ -256,10 +227,10 @@ The outer loop steers the thrust vector toward the hover point while damping vel
 - `m(0) = 1.60 kg`
 
 ### Target state
-- `x_d = 0.0 m`
-- `y_d = 8.0 m`
-- `phi_d = 0.0 rad`
-- `vx_d = vy_d = omega_d = 0`
+- `phi_target = 0.0 rad`
+- `omega_target = 0.0 rad/s`
+
+Translational states are not controlled — position and velocity evolve freely.
 
 ### Physical parameters
 - `g = 9.81 m/s^2`
@@ -273,14 +244,17 @@ The outer loop steers the thrust vector toward the hover point while damping vel
 - `l_cp = 0.6091 m` at midpoint mass
 - `J_const = 0.1183 kg m^2` at midpoint mass
 
-### Controller gains
-- `k_px = 0.45`
-- `k_dx = 1.30`
-- `k_py = 0.80`
-- `k_dy = 1.80`
-- `k_phi = 18.0`
+### Controller gains (PD Lyapunov)
+- `k_phi = 25.0`
 - `k_omega = 7.0`
-- `phi_des_limit_deg = 22.0`
+- `phi_target_deg = 0.0`
+
+### Controller gains (cross-term Lyapunov)
+- `k_phi = 25.0`
+- `k_omega = 10.0`
+- `k_c = 7.0`
+- `c = 0.2`
+- `phi_target_deg = 0.0`
 
 ### Numerical setup
 - final simulation time: `20.0 s`
