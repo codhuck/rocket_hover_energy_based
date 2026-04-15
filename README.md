@@ -50,7 +50,7 @@ Generated outputs:
 ```text
 project_1_lyapunov_control_planar_tvc_rocket/
 ├── README.md
-├── P1_TVC_Lyapunov_Derivation.md
+├── README-derivation-lyapunov.md
 ├── requirements.txt
 ├── run_project.sh
 ├── configs/
@@ -186,7 +186,7 @@ $$
 
 followed by an `arcsin` and a hard saturation to `[-delta_max, delta_max]`.
 
-For a more detailed mathematical derivation, see [P1_TVC_Lyapunov_Derivation.md](P1_TVC_Lyapunov_Derivation.md).
+For a more detailed mathematical derivation, see [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
 
 ### Cross-term Lyapunov attitude law
 For the cross-term regulator, the Lyapunov candidate is
@@ -217,7 +217,7 @@ If `abs(d) < eps`, the implementation falls back to the PD law for numerical rob
 - The **inner loop** drives the rocket pitch toward the commanded pitch and damps angular motion.
 - Translational drag is not cancelled, so it contributes extra dissipation.
 
-The code intentionally implements the simplified Project 1 model, not a fully parameter-varying rocket. A longer derivation note is included in `P1_TVC_Lyapunov_Derivation.md`.
+The code intentionally implements the simplified Project 1 model, not a fully parameter-varying rocket. A longer derivation note is included in `README-derivation-lyapunov.md`.
 
 ## 4. Method Description
 ### Control pipeline
