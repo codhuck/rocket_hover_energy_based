@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 import math
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from .controller import AttitudeLyapunovController
+from .controller import AttitudeLyapunovController, CrossTermLyapunovController
 from .system import RocketParams, rocket_rhs
 
 
@@ -36,10 +36,9 @@ def build_initial_state(cfg: Dict) -> np.ndarray:
     )
 
 
-def simulate(cfg: Dict) -> SimulationResult:
+def _simulate_with_controller(cfg: Dict, controller) -> SimulationResult:
     state0 = build_initial_state(cfg)
     params = RocketParams.from_config(cfg)
-    controller = AttitudeLyapunovController.from_config(cfg)
     exp = cfg['experiment']
 
     t_eval = np.linspace(0.0, float(exp['t_final']), int(exp['sample_count']))
@@ -112,3 +111,16 @@ def simulate(cfg: Dict) -> SimulationResult:
         params=params,
         config=cfg,
     )
+
+
+def simulate(cfg: Dict) -> SimulationResult:
+    controller = AttitudeLyapunovController.from_config(cfg)
+    return _simulate_with_controller(cfg, controller)
+
+
+def simulate_both(cfg: Dict) -> Tuple[SimulationResult, SimulationResult]:
+    controller_pd = AttitudeLyapunovController.from_config(cfg)
+    controller_cross = CrossTermLyapunovController.from_config(cfg)
+    result_pd = _simulate_with_controller(cfg, controller_pd)
+    result_cross = _simulate_with_controller(cfg, controller_cross)
+    return result_pd, result_cross

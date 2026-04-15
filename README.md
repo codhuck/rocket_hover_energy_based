@@ -3,7 +3,11 @@
 ![Visualisation preview](figures/rocket_visualization_preview.png)
 
 ## Overview
-This repository implements a **planar thrust-vector-controlled rocket** that stabilizes to a fixed hover point using a **Lyapunov-inspired cascade controller**. The repository is arranged to satisfy the course project rules: the system dynamics, controller, simulation loop, and visualisation are split into separate modules; the outputs include reproducible plots, a real-time animation, explicit run commands, and a short results summary.
+This repository implements a **planar thrust-vector-controlled rocket** with two inner-loop attitude regulators:
+- a baseline **Lyapunov PD** controller;
+- a **cross-term Lyapunov** controller.
+
+The simulation pipeline runs both controllers from the same initial condition and generates a direct comparison plot, while preserving all original PD outputs (plots, animation, and JSON summary).
 
 The default hover target is
 - **position:** `(x_d, y_d) = (0.0, 8.0) m`
@@ -38,8 +42,9 @@ Generated outputs:
 - `figures/control_and_error.png`
 - `figures/planar_trajectory.png`
 - `figures/rocket_visualization_preview.png`
+- `figures/comparison.png`
 - `figures/summary.json`
-- `animations/rocket_hover_realtime.mp4`
+- `animations/rocket_attitude_realtime.mp4`
 
 ## Repository Structure
 ```text
@@ -65,7 +70,7 @@ project_1_lyapunov_control_planar_tvc_rocket/
 │   ├── state_trajectories.png
 │   └── summary.json
 └── animations/
-    └── rocket_hover_realtime.mp4
+    └── rocket_attitude_realtime.mp4
 ```
 
 ## 1. Problem Definition
@@ -256,36 +261,59 @@ python -m src.main --config configs/default.yaml --output-root .
 
 ### What each module does
 - `src/system.py` defines the rocket parameters and nonlinear right-hand side;
-- `src/controller.py` implements the Lyapunov hover controller;
-- `src/simulation.py` integrates the system and computes metrics;
-- `src/visualization.py` generates all figures and the corrected real-time MP4 animation;
-- `src/main.py` runs the full pipeline from config to outputs.
+- `src/controller.py` implements two attitude regulators: `AttitudeLyapunovController` and `CrossTermLyapunovController`;
+- `src/simulation.py` integrates the system and provides `simulate` (PD) plus `simulate_both` (PD + cross-term);
+- `src/visualization.py` generates all figures, including `comparison.png`, and the corrected real-time MP4 animation;
+- `src/main.py` runs both regulators and writes a combined `figures/summary.json` (`pd`, `cross_term`, `comparison`).
 
 ## 7. Results Summary
-The default experiment converges to the hover target and stays comfortably inside the gimbal limit.
+Both regulators converge in attitude (`phi -> 0`, `omega -> 0`) in the default experiment. The cross-term regulator reduces peak gimbal demand but increases translational speed and drift compared with the PD baseline.
 
 ### Quantitative results
-- final position: `(-3.91e-05, 7.999994) m`
-- final pitch: `-5.9e-05 deg`
-- final speed: `2.03e-05 m/s`
-- final position error: `3.91e-05 m`
-- maximum position error during the run: `7.280 m`
-- maximum absolute pitch: `12.000 deg`
-- maximum absolute gimbal command: `1.330 deg`
-- fuel used: `0.242 kg`
-- minimum mass reached: `1.358 kg`
+- **PD controller**
+  - final position: `(4.286100220018184, 7.317845231040285) m`
+  - final pitch: `-9.289540202597493e-08 deg`
+  - final angular rate: `2.6765738366331744e-06 deg/s`
+  - final speed: `0.8828260180662892 m/s`
+  - max absolute gimbal: `5.50247288376789 deg`
+  - max speed: `0.9787758492524684 m/s`
+- **Cross-term controller**
+  - final position: `(7.218912011175233, 7.153153571277549) m`
+  - final pitch: `4.8792597768221715e-06 deg`
+  - final angular rate: `-1.911513020195674e-05 deg/s`
+  - final speed: `1.5609724965023237 m/s`
+  - max absolute gimbal: `2.6852208077477684 deg`
+  - max speed: `1.5609724965023237 m/s`
+- **Difference (cross-term − PD)**
+  - `final_phi_deg_diff = 4.972155178848146e-06`
+  - `final_omega_deg_s_diff = -2.1791704038589914e-05`
+  - `max_abs_delta_deg_diff = -2.8172520760201216 deg`
+  - `max_speed_diff = 0.5821966472498553 m/s`
 
 ### What works
-- The rocket removes the horizontal offset and reaches the target altitude.
-- The attitude loop remains fast compared with the translational motion.
-- The gimbal demand stays small compared with the available `15 deg` authority.
+- Both regulators stabilize attitude and angular rate to near-zero.
+- The cross-term regulator decreases peak gimbal demand compared with PD.
+- The comparison pipeline is reproducible via one command and saves both plot and numeric comparison.
 - The exported MP4 now matches the physical simulation time instead of playing too fast.
+
+### Alternative regulator (cross-term)
+- Lyapunov function:
+  - `V = 0.5*k_phi*e_phi^2 + 0.5*omega^2 + c*e_phi*omega`
+- Control law:
+  - `numerator = k_phi*e_phi*omega + (c + k_omega)*omega^2 + k_c*e_phi^2`
+  - `denominator = omega + c*e_phi`
+  - `sin(delta) = (J / (alpha * F_max * l_cp)) * (numerator / denominator)`
+- Singularity protection in code:
+  - if `|denominator| < eps`, fallback to PD law.
+- Practical interpretation for current tuning:
+  - smoother actuator demand (`|delta|` peak lower),
+  - weaker translational performance (`max_speed` and drift higher).
 
 ### What remains limited
 - The inertia and control moment arm are frozen at midpoint mass.
 - Rotational drag, actuator dynamics, and sensor noise are omitted.
 - The proof is quasi-static with respect to mass variation.
-- No baseline comparison is included because this is a Project 1 repository.
+- Comparison currently uses one scenario (single initial condition and one gain set).
 
 ## 8. Figures and Interpretation
 ### State trajectories
@@ -306,7 +334,7 @@ The planar path bends smoothly toward the hover point. The conclusion is that th
 
 ## 9. Animation
 The project includes a corrected real-time animation:
-- `animations/rocket_hover_realtime.mp4`
+- `animations/rocket_attitude_realtime.mp4`
 
 The animation shows the rocket body, the hover target, the path, the current orientation, the current time, the throttle command, the gimbal angle, and the instantaneous position error.
 

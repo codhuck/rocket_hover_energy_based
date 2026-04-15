@@ -5,6 +5,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import shutil
 import subprocess
 import tempfile
 
@@ -240,6 +241,40 @@ def save_all_figures(result: SimulationResult, output_dir: Path) -> None:
     plt.close(fig)
 
 
+def plot_comparison(result_pd: SimulationResult, result_cross: SimulationResult, output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    t_pd = result_pd.t
+    t_cross = result_cross.t
+
+    fig, axes = plt.subplots(3, 1, figsize=(9, 10), sharex=True, facecolor=PALETTE['bg'])
+    for ax in axes:
+        _decorate_timeseries_axes(ax)
+
+    axes[0].plot(t_pd, np.degrees(result_pd.state[:, 2]), color=PALETTE['phi'], lw=1.8, label='PD')
+    axes[0].plot(t_cross, np.degrees(result_cross.state[:, 2]), color=PALETTE['vertical'], lw=1.8, ls='--', label='Cross-term')
+    axes[0].set_ylabel('phi [deg]', color=PALETTE['label'])
+    axes[0].set_title('Attitude angle comparison', color=PALETTE['title'], fontsize=10)
+    axes[0].legend(fontsize=8)
+
+    axes[1].plot(t_pd, np.degrees(result_pd.state[:, 5]), color=PALETTE['omega'], lw=1.8, label='PD')
+    axes[1].plot(t_cross, np.degrees(result_cross.state[:, 5]), color=PALETTE['accel'], lw=1.8, ls='--', label='Cross-term')
+    axes[1].set_ylabel('omega [deg/s]', color=PALETTE['label'])
+    axes[1].set_title('Angular rate comparison', color=PALETTE['title'], fontsize=10)
+    axes[1].legend(fontsize=8)
+
+    axes[2].plot(t_pd, np.degrees(result_pd.controls['delta']), color=PALETTE['delta'], lw=1.8, label='PD')
+    axes[2].plot(t_cross, np.degrees(result_cross.controls['delta']), color=PALETTE['trail'], lw=1.8, ls='--', label='Cross-term')
+    axes[2].set_xlabel('Time [s]', color=PALETTE['label'])
+    axes[2].set_ylabel('delta [deg]', color=PALETTE['label'])
+    axes[2].set_title('Gimbal command comparison', color=PALETTE['title'], fontsize=10)
+    axes[2].legend(fontsize=8)
+
+    fig.tight_layout()
+    fig.savefig(output_dir / 'comparison.png', dpi=190, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
 def save_preview_figure(result: SimulationResult, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     preview_idx = min(len(result.t) - 1, len(result.t) // 3)
@@ -335,8 +370,13 @@ def save_animation(result: SimulationResult, output_path: Path) -> None:
                 fig.suptitle('Planar TVC Rocket — Attitude Stabilization', color=PALETTE['text'], fontsize=11)
                 fig.savefig(tmpdir_path / f"frame_{frame_idx:05d}.png", dpi=80, facecolor=fig.get_facecolor())
 
+            ffmpeg_exe = shutil.which('ffmpeg')
+            if ffmpeg_exe is None:
+                import imageio_ffmpeg
+                ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+
             cmd = [
-                'ffmpeg', '-y', '-loglevel', 'error', '-framerate', str(fps),
+                ffmpeg_exe, '-y', '-loglevel', 'error', '-framerate', str(fps),
                 '-i', str(tmpdir_path / 'frame_%05d.png'),
                 '-pix_fmt', 'yuv420p', '-vcodec', 'libx264', str(output_path),
             ]

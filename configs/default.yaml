@@ -25,6 +25,13 @@ rocket:
   delta_max_deg: 15.0
 
 controller:
-  k_phi: 18.0
+  k_phi: 25.0
   k_omega: 7.0
+  phi_target_deg: 0.0
+
+controller_crossterm:
+  k_phi: 25.0
+  k_omega: 10.0
+  k_c: 7
+  c: 0.2
   phi_target_deg: 0.0
