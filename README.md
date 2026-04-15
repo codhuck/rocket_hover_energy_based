@@ -186,6 +186,8 @@ $$
 
 followed by an `arcsin` and a hard saturation to `[-delta_max, delta_max]`.
 
+For a more detailed mathematical derivation, see [P1_TVC_Lyapunov_Derivation.md](P1_TVC_Lyapunov_Derivation.md).
+
 ### Cross-term Lyapunov attitude law
 For the cross-term regulator, the Lyapunov candidate is
 
