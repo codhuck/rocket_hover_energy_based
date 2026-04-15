@@ -1,6 +1,6 @@
 project:
-  name: project_1_lyapunov_control_planar_tvc_rocket
-  description: Planar TVC rocket attitude stabilization with a Lyapunov-based inner loop
+  name: project_1_lyapunov_control_planar_tvc_rocket_tuning_springy
+  description: Planar TVC rocket attitude stabilization with a springy, lightly damped controller
 
 experiment:
   t_final: 5.0
@@ -29,5 +29,5 @@ rocket:
 
 controller:
   k_phi: 18.0
-  k_omega: 7.0
+  k_omega: 2.0
   phi_target_deg: 0.0

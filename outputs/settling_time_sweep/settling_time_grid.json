@@ -1,0 +1,362 @@
+[
+  {
+    "k_phi": 6.0,
+    "k_omega": 2.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.5902777777777778
+  },
+  {
+    "k_phi": 8.0,
+    "k_omega": 2.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 1.2777777777777777
+  },
+  {
+    "k_phi": 10.0,
+    "k_omega": 2.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 1.222222222222222
+  },
+  {
+    "k_phi": 12.0,
+    "k_omega": 2.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 1.1527777777777777
+  },
+  {
+    "k_phi": 14.0,
+    "k_omega": 2.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 1.0833333333333333
+  },
+  {
+    "k_phi": 16.0,
+    "k_omega": 2.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 1.0277777777777777
+  },
+  {
+    "k_phi": 18.0,
+    "k_omega": 2.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.9791666666666666
+  },
+  {
+    "k_phi": 20.0,
+    "k_omega": 2.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.9305555555555555
+  },
+  {
+    "k_phi": 22.0,
+    "k_omega": 2.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.8958333333333333
+  },
+  {
+    "k_phi": 24.0,
+    "k_omega": 2.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.861111111111111
+  },
+  {
+    "k_phi": 6.0,
+    "k_omega": 3.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.6875
+  },
+  {
+    "k_phi": 8.0,
+    "k_omega": 3.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.5694444444444444
+  },
+  {
+    "k_phi": 10.0,
+    "k_omega": 3.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.4930555555555555
+  },
+  {
+    "k_phi": 12.0,
+    "k_omega": 3.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.4375
+  },
+  {
+    "k_phi": 14.0,
+    "k_omega": 3.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.40277777777777773
+  },
+  {
+    "k_phi": 16.0,
+    "k_omega": 3.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.3680555555555555
+  },
+  {
+    "k_phi": 18.0,
+    "k_omega": 3.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.861111111111111
+  },
+  {
+    "k_phi": 20.0,
+    "k_omega": 3.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.8472222222222222
+  },
+  {
+    "k_phi": 22.0,
+    "k_omega": 3.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.8263888888888888
+  },
+  {
+    "k_phi": 24.0,
+    "k_omega": 3.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.8055555555555555
+  },
+  {
+    "k_phi": 6.0,
+    "k_omega": 4.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.8125
+  },
+  {
+    "k_phi": 8.0,
+    "k_omega": 4.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.6527777777777778
+  },
+  {
+    "k_phi": 10.0,
+    "k_omega": 4.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.5555555555555556
+  },
+  {
+    "k_phi": 12.0,
+    "k_omega": 4.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.4861111111111111
+  },
+  {
+    "k_phi": 14.0,
+    "k_omega": 4.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.4375
+  },
+  {
+    "k_phi": 16.0,
+    "k_omega": 4.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.40277777777777773
+  },
+  {
+    "k_phi": 18.0,
+    "k_omega": 4.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.375
+  },
+  {
+    "k_phi": 20.0,
+    "k_omega": 4.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.35416666666666663
+  },
+  {
+    "k_phi": 22.0,
+    "k_omega": 4.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.3333333333333333
+  },
+  {
+    "k_phi": 24.0,
+    "k_omega": 4.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.3125
+  },
+  {
+    "k_phi": 6.0,
+    "k_omega": 5.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.9722222222222222
+  },
+  {
+    "k_phi": 8.0,
+    "k_omega": 5.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.7569444444444444
+  },
+  {
+    "k_phi": 10.0,
+    "k_omega": 5.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.6319444444444444
+  },
+  {
+    "k_phi": 12.0,
+    "k_omega": 5.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.548611111111111
+  },
+  {
+    "k_phi": 14.0,
+    "k_omega": 5.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.4861111111111111
+  },
+  {
+    "k_phi": 16.0,
+    "k_omega": 5.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.4444444444444444
+  },
+  {
+    "k_phi": 18.0,
+    "k_omega": 5.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.4097222222222222
+  },
+  {
+    "k_phi": 20.0,
+    "k_omega": 5.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.3819444444444444
+  },
+  {
+    "k_phi": 22.0,
+    "k_omega": 5.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.35416666666666663
+  },
+  {
+    "k_phi": 24.0,
+    "k_omega": 5.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.3333333333333333
+  },
+  {
+    "k_phi": 6.0,
+    "k_omega": 6.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 1.159722222222222
+  },
+  {
+    "k_phi": 8.0,
+    "k_omega": 6.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.8819444444444444
+  },
+  {
+    "k_phi": 10.0,
+    "k_omega": 6.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.7222222222222222
+  },
+  {
+    "k_phi": 12.0,
+    "k_omega": 6.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.6180555555555555
+  },
+  {
+    "k_phi": 14.0,
+    "k_omega": 6.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.5416666666666666
+  },
+  {
+    "k_phi": 16.0,
+    "k_omega": 6.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.4861111111111111
+  },
+  {
+    "k_phi": 18.0,
+    "k_omega": 6.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.4444444444444444
+  },
+  {
+    "k_phi": 20.0,
+    "k_omega": 6.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.4097222222222222
+  },
+  {
+    "k_phi": 22.0,
+    "k_omega": 6.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.3819444444444444
+  },
+  {
+    "k_phi": 24.0,
+    "k_omega": 6.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.3611111111111111
+  },
+  {
+    "k_phi": 6.0,
+    "k_omega": 7.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 1.3680555555555556
+  },
+  {
+    "k_phi": 8.0,
+    "k_omega": 7.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 1.0277777777777777
+  },
+  {
+    "k_phi": 10.0,
+    "k_omega": 7.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.8263888888888888
+  },
+  {
+    "k_phi": 12.0,
+    "k_omega": 7.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.7013888888888888
+  },
+  {
+    "k_phi": 14.0,
+    "k_omega": 7.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.611111111111111
+  },
+  {
+    "k_phi": 16.0,
+    "k_omega": 7.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.5416666666666666
+  },
+  {
+    "k_phi": 18.0,
+    "k_omega": 7.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.4930555555555555
+  },
+  {
+    "k_phi": 20.0,
+    "k_omega": 7.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.45138888888888884
+  },
+  {
+    "k_phi": 22.0,
+    "k_omega": 7.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.41666666666666663
+  },
+  {
+    "k_phi": 24.0,
+    "k_omega": 7.0,
+    "phi_error_band_rad": 0.1,
+    "settling_time_phi_error_band_s": 0.38888888888888884
+  }
+]
