@@ -28,7 +28,7 @@ def main() -> None:
     summary_path = figures_dir / 'summary.json'
     summary_path.write_text(json.dumps(result.summary, indent=2), encoding='utf-8')
 
-    save_animation(result, animations_dir / 'rocket_hover_realtime.mp4')
+    save_animation(result, animations_dir / 'rocket_attitude_realtime.mp4')
 
     print(json.dumps(result.summary, indent=2))
 
