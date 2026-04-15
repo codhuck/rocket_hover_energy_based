@@ -92,9 +92,9 @@ The method belongs to **Lyapunov-based nonlinear control** and uses a two-layer 
 ### State, control, and notation
 The state is
 
-\[
-q = [x, y, \phi, \dot x, \dot y, \dot \phi, m]^T,
-\]
+$$
+q = [x, y, \phi, \dot{x}, \dot{y}, \dot{\phi}, m]^T
+$$
 
 where
 - `x, y` are inertial horizontal and vertical positions in meters,
@@ -105,9 +105,9 @@ where
 
 The control input is
 
-\[
-u = [\alpha, \delta]^T,
-\]
+$$
+u = [\alpha, \delta]^T
+$$
 
 where
 - `alpha in [0, 1]` is the throttle command,
@@ -116,18 +116,21 @@ where
 ### Nonlinear dynamics used in the code
 With thrust `F = alpha F_max`, translational drag coefficient `beta_drag`, and midpoint approximations for `J_const` and `l_cp`, the implemented dynamics are
 
-\[
-\dot m = -\alpha \dot m_{max},
-\]
-\[
-\ddot x = \frac{\alpha F_{max}}{m}\sin(\phi + \delta) - \frac{\beta_{drag}}{m}\dot x\sqrt{\dot x^2 + \dot y^2},
-\]
-\[
-\ddot y = \frac{\alpha F_{max}}{m}\cos(\phi + \delta) - g - \frac{\beta_{drag}}{m}\dot y\sqrt{\dot x^2 + \dot y^2},
-\]
-\[
-\ddot \phi = -\frac{\alpha F_{max} l_{cp}}{J_{const}}\sin(\delta).
-\]
+$$
+\dot{m} = -\alpha \dot{m}_{max}
+$$
+
+$$
+\ddot{x} = \frac{\alpha F_{max}}{m}\sin(\phi + \delta) - \frac{\beta_{drag}}{m}\dot{x}\sqrt{\dot{x}^2 + \dot{y}^2}
+$$
+
+$$
+\ddot{y} = \frac{\alpha F_{max}}{m}\cos(\phi + \delta) - g - \frac{\beta_{drag}}{m}\dot{y}\sqrt{\dot{x}^2 + \dot{y}^2}
+$$
+
+$$
+\ddot{\phi} = -\frac{\alpha F_{max} l_{cp}}{J_{const}}\sin(\delta)
+$$
 
 The code computes `F_max = m_dot_max * v_e` from the mass-flow rate and effective exhaust velocity, then computes midpoint-mass values of `l_cp` and `J_const` from the dry structure and fuel geometry.
 
@@ -142,44 +145,70 @@ When the dry mass is reached, the thrust is set to zero and further fuel depleti
 ### Outer-loop virtual thrust law
 Define the position errors
 
-\[
-e_x = x - x_d, \qquad e_y = y - y_d.
-\]
+$$
+e_x = x - x_d, \qquad e_y = y - y_d
+$$
 
 The outer loop commands the desired specific thrust components
 
-\[
-A_x = -k_{px} e_x - k_{dx} \dot x,
-\]
-\[
-A_y = g - k_{py} e_y - k_{dy} \dot y.
-\]
+$$
+A_x = -k_{px} e_x - k_{dx}\dot{x}
+$$
+
+$$
+A_y = g - k_{py} e_y - k_{dy}\dot{y}
+$$
 
 From these terms,
 
-\[
-T_{des} = \sqrt{A_x^2 + A_y^2}, \qquad \phi_{des} = \operatorname{atan2}(A_x, A_y),
-\]
-\[
-\alpha = \operatorname{clip}\left(\frac{m T_{des}}{F_{max}}, \alpha_{min}, 1\right).
-\]
+$$
+T_{des} = \sqrt{A_x^2 + A_y^2}, \qquad \phi_{des} = \operatorname{atan2}(A_x, A_y)
+$$
+
+$$
+\alpha = \operatorname{clip}\left(\frac{m T_{des}}{F_{max}}, \alpha_{min}, 1\right)
+$$
 
 The desired pitch is clipped to `phi_des_limit_deg` from the configuration file.
 
 ### Inner-loop Lyapunov attitude law
 The inner loop uses the wrapped attitude error
 
-\[
-e_\phi = \operatorname{wrap}(\phi - \phi_{des}).
-\]
+$$
+e_\phi = \operatorname{wrap}(\phi - \phi_{des})
+$$
 
 The gimbal command is computed from
 
-\[
-\sin(\delta) = \frac{J_{const}}{\alpha F_{max} l_{cp}}\left(k_\phi e_\phi + k_\omega \dot \phi\right),
-\]
+$$
+\sin(\delta) = \frac{J_{const}}{\alpha F_{max} l_{cp}}\left(k_\phi e_\phi + k_\omega \dot{\phi}\right)
+$$
 
 followed by an `arcsin` and a hard saturation to `[-delta_max, delta_max]`.
+
+### Cross-term Lyapunov attitude law
+For the cross-term regulator, the Lyapunov candidate is
+
+$$
+V = \frac{1}{2}k_\phi e_\phi^2 + \frac{1}{2}\dot{\phi}^2 + c\,e_\phi \dot{\phi}
+$$
+
+with control law
+
+$$
+n = k_\phi e_\phi \omega + (c + k_\omega)\omega^2 + k_c e_\phi^2
+$$
+
+$$
+d = \omega + c e_\phi
+$$
+
+$$
+\sin(\delta) = \frac{J_{const}}{\alpha F_{max} l_{cp}} \cdot \frac{n}{d}
+$$
+
+and the same `arcsin` and hard saturation to `[-delta_max, delta_max]`.
+If `abs(d) < eps`, the implementation falls back to the PD law for numerical robustness.
 
 ### Stability interpretation
 - The **outer loop** makes the translational error behave like a damped second-order system.
@@ -309,6 +338,37 @@ Both regulators converge in attitude (`phi -> 0`, `omega -> 0`) in the default e
   - smoother actuator demand (`|delta|` peak lower),
   - weaker translational performance (`max_speed` and drift higher).
 
+### Cross-term sweep summary
+The repository includes a gain sweep report generated from `figures/crossterm_sweep_phi01_compact.json` with threshold `|phi| < 0.1 rad`.
+
+| Metric | Value |
+|---|---|
+| Input cases | 36 |
+| Converged cases | 6 |
+| Non-converged cases | 30 |
+| Fixed gains during sweep | `k_phi=25`, `k_omega=10` |
+| Swept gains | `k_c in [0,5]`, `c in [0.2,2.2]` |
+
+Top converged settings by persistent settling time:
+
+| Rank | `k_c` | `c` | First entry [s] | Settling [s] | Max abs delta [deg] | Max speed [m/s] |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0 | 0.2 | 0.4861 | 0.4861 | 10.4117 | 1.2931 |
+| 2 | 1 | 0.2 | 0.4931 | 0.4931 | 9.1560 | 1.3194 |
+| 3 | 2 | 0.2 | 0.5069 | 0.5069 | 7.9048 | 1.3480 |
+| 4 | 3 | 0.2 | 0.5139 | 0.5139 | 6.6573 | 1.3796 |
+| 5 | 4 | 0.2 | 0.5278 | 0.5278 | 5.4130 | 1.4148 |
+| 6 | 5 | 0.2 | 0.5417 | 0.5417 | 4.1712 | 1.4549 |
+
+Analysis:
+- Convergence is highly concentrated in a narrow band of `c` (here only `c=0.2` converged in the tested grid).
+- Small changes in `c` can move the system from fast convergence to complete non-convergence over the simulation horizon.
+- Increasing `k_c` in the converged band reduces peak gimbal demand, but also tends to increase translational speed.
+
+Conclusion:
+- The cross-term regulator is significantly more sensitive to tuning than the PD baseline in this project setup.
+- It can provide smoother actuator behavior, but practical tuning is difficult and requires careful grid search with explicit convergence checks.
+
 ### What remains limited
 - The inertia and control moment arm are frozen at midpoint mass.
 - Rotational drag, actuator dynamics, and sensor noise are omitted.
@@ -331,6 +391,10 @@ Throttle, speed, and position error all decay toward their hover values. The con
 ### Planar trajectory
 ![Planar trajectory](figures/planar_trajectory.png)
 The planar path bends smoothly toward the hover point. The conclusion is that the rocket reaches the target without aggressive overshoot.
+
+### PD vs Cross-term comparison
+![Controller comparison](figures/comparison_best.png)
+The comparison figure shows both controllers on the same axes. In this run, the cross-term controller exhibits lower angular overshoot and a smoother gimbal profile than the PD baseline.
 
 ## 9. Animation
 The project includes a corrected real-time animation:
