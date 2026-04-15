@@ -27,7 +27,7 @@ The system is a planar (2D) rocket with thrust vector control (TVC). A single en
 
 ### System Diagram
 
-```
+$$
          ^ y (vertical)
          |
     _____|_____
@@ -42,7 +42,7 @@ The system is a planar (2D) rocket with thrust vector control (TVC). A single en
           \
            ↙ F    <-- thrust vector
          x (horizontal) →
-```
+$$
 
 The pitch angle $\varphi$ is measured from the vertical (+y axis), positive rightward. The gimbal angle $\delta$ is measured from the rocket body axis, positive rightward. The thrust $F$ acts along the nozzle axis.
 
@@ -50,9 +50,9 @@ The pitch angle $\varphi$ is measured from the vertical (+y axis), positive righ
 
 The system state vector is:
 
-```math
+$$
 \mathbf{q} = [x,\; y,\; \varphi,\; \dot{x},\; \dot{y},\; \dot{\varphi}]^T
-```
+$$
 
 where:
 - $x, y$ — inertial horizontal and vertical position (m)
@@ -62,9 +62,9 @@ where:
 
 The sole control input is the gimbal deflection angle:
 
-```math
+$$
 u = \delta, \qquad |\delta| \leq \delta_{\max}
-```
+$$
 
 The throttle $\alpha$ is not a control input — it is fixed at the hover value throughout (see Parameters).
 
@@ -84,27 +84,27 @@ The throttle $\alpha$ is not a control input — it is fixed at the hover value 
 
 The throttle is fixed at the hover value so that thrust exactly balances gravity:
 
-```math
+$$
 F = mg \tag{1}
-```
+$$
 
 The translational states $x$, $y$, $\dot{x}$, $\dot{y}$ evolve freely under this thrust — they are **not controlled in P1**:
 
-```math
+$$
 \ddot{x} = \frac{mg}{m} \sin(\varphi + \delta) = g\sin(\varphi + \delta) \tag{2}
-```
+$$
 
-```math
+$$
 \ddot{y} = \frac{mg}{m} \cos(\varphi + \delta) - g = g\cos(\varphi + \delta) - g \tag{3}
-```
+$$
 
 Note that equations (2)–(3) are exact for all $\varphi$ and $\delta$ — the decomposition $\sin(\varphi+\delta)$ and $\cos(\varphi+\delta)$ is a kinematic identity, not a small-angle approximation. At equilibrium ($\varphi = 0$, $\delta = 0$), equation (3) gives $\ddot{y} = 0$ — gravity is exactly balanced. Equation (2) gives $\ddot{x} = 0$ — no horizontal acceleration. However any horizontal velocity accumulated during the correction phase persists, since there is no mechanism to cancel it. This is a known limitation of the attitude-only controller, stated explicitly in the Simplifying Assumptions.
 
 Substituting $F = mg$ into the angular momentum balance about the CoM:
 
-```math
+$$
 \ddot{\varphi} = -\frac{mg \cdot l_{cp}}{J} \sin(\delta) \tag{4}
-```
+$$
 
 The quantity $mg \cdot l_{cp} / J$ is a constant with units of rad/s² and represents the maximum angular acceleration per unit $\sin(\delta)$. The negative sign reflects the restoring convention: positive $\delta$ (nozzle deflected rightward) generates a negative (leftward) angular acceleration, which corrects positive pitch.
 
@@ -132,29 +132,29 @@ These assumptions reduce the full 7-state variable-mass system to a tractable 2-
 
 The equilibrium to be stabilized is the upright hover condition:
 
-```math
+$$
 \varphi^* = 0, \quad \dot{\varphi}^* = 0
-```
+$$
 
 We define the attitude error coordinates:
 
-```math
+$$
 e_\varphi = \varphi - \varphi^* = \varphi, \qquad \dot{e}_\varphi = \dot{\varphi}
-```
+$$
 
 The sole control input is $\delta$. The thrust is constant at $F = mg$ (from Assumption 3), so the attitude dynamics reduce to:
 
-```math
+$$
 \ddot{\varphi} = -\frac{mg \cdot l_{cp}}{J} \sin(\delta) \tag{5}
-```
+$$
 
 ### Lyapunov Function Candidate
 
 We propose the following quadratic Lyapunov function candidate over the attitude error states:
 
-```math
+$$
 V = \frac{1}{2} k_\varphi \, e_\varphi^2 + \frac{1}{2} \dot{\varphi}^2 \tag{6}
-```
+$$
 
 where $k_\varphi > 0$ is a positive gain. This function has two components:
 1. **Position term** $\frac{1}{2} k_\varphi e_\varphi^2$: penalizes pitch angle deviation from zero.
@@ -170,57 +170,57 @@ where $k_\varphi > 0$ is a positive gain. This function has two components:
 
 Taking the time derivative of $V$ along the system trajectories:
 
-```math
+$$
 \dot{V} = k_\varphi \, e_\varphi \, \dot{e}_\varphi + \dot{\varphi} \, \ddot{\varphi}
-```
+$$
 
 Since $e_\varphi = \varphi$ and $\dot{e}_\varphi = \dot{\varphi}$, this becomes:
 
-```math
+$$
 \dot{V} = k_\varphi \, \varphi \, \dot{\varphi} + \dot{\varphi} \, \ddot{\varphi}
-```
+$$
 
 Factoring out $\dot{\varphi}$:
 
-```math
+$$
 \dot{V} = \dot{\varphi} \left( k_\varphi \, \varphi + \ddot{\varphi} \right) \tag{7}
-```
+$$
 
 Substituting the attitude dynamics (5):
 
-```math
+$$
 \dot{V} = \dot{\varphi} \left( k_\varphi \, \varphi - \frac{mg \cdot l_{cp}}{J} \sin(\delta) \right) \tag{8}
-```
+$$
 
 To guarantee $\dot{V} \leq 0$, we require the expression in parentheses to be proportional to $-\dot{\varphi}$ with a positive coefficient. We set:
 
-```math
+$$
 k_\varphi \, \varphi - \frac{mg \cdot l_{cp}}{J} \sin(\delta) = -k_\omega \, \dot{\varphi} \tag{9}
-```
+$$
 
 where $k_\omega > 0$ is a damping gain. Substituting (9) into (8):
 
-```math
+$$
 \dot{V} = -k_\omega \, \dot{\varphi}^2 \leq 0 \tag{10}
-```
+$$
 
 This is negative semi-definite for all $k_\omega > 0$.
 
 Solving equation (9) for $\delta$:
 
-```math
+$$
 \sin(\delta) = \frac{J}{mg \cdot l_{cp}} \left( k_\varphi \, \varphi + k_\omega \, \dot{\varphi} \right)
-```
+$$
 
-```math
+$$
 \boxed{\delta = \arcsin\!\left(\text{clamp}\!\left(\frac{J}{mg \cdot l_{cp}} \left( k_\varphi \, \varphi + k_\omega \, \dot{\varphi} \right),\; -1,\; 1\right)\right)} \tag{11}
-```
+$$
 
 The coefficient $J / (mg \cdot l_{cp})$ is a positive constant determined entirely by physical parameters. The clamp operation enforces $|\sin(\delta)| \leq 1$ — ensuring the argument remains in the domain of $\arcsin$. Physically this corresponds to gimbal saturation: when the demanded correction exceeds the gimbal authority, the gimbal is held at its maximum. Gimbal angle saturation is then applied as a second constraint:
 
-```math
+$$
 \delta \leftarrow \text{clamp}(\delta,\; -\delta_{\max},\; \delta_{\max}) \tag{12}
-```
+$$
 
 ### Solvability Condition
 
@@ -228,9 +228,9 @@ The control law (11) requires the denominator $mg \cdot l_{cp} \neq 0$. Since $F
 
 To avoid gimbal saturation during normal operation, the gains should be chosen such that:
 
-```math
+$$
 \frac{J}{mg \cdot l_{cp}} \left( k_\varphi \, |\varphi|_{\max} + k_\omega \, |\dot{\varphi}|_{\max} \right) \leq 1 \tag{13}
-```
+$$
 
 If this is violated, $\dot{V} \leq 0$ is still maintained — a saturated gimbal cannot worsen stability — but the rate of convergence slows.
 
@@ -244,15 +244,15 @@ From (10), $\dot{V} = -k_\omega \dot{\varphi}^2 \leq 0$ along all trajectories, 
 
 Applying **LaSalle's invariance principle**: in the largest invariant set where $\dot{\varphi} = 0$, the dynamics require $\ddot{\varphi} = 0$ as well. Substituting into (5):
 
-```math
+$$
 0 = -\frac{mg \cdot l_{cp}}{J} \sin(\delta)
-```
+$$
 
 Since $mg \cdot l_{cp} / J > 0$, this gives $\sin(\delta) = 0$. Substituting back into (9) with $\dot{\varphi} = 0$:
 
-```math
+$$
 k_\varphi \, \varphi = 0 \implies \varphi = 0
-```
+$$
 
 The largest invariant set is therefore the single point $(\varphi, \dot{\varphi}) = (0, 0)$. By LaSalle's invariance principle, **all trajectories converge asymptotically to the upright equilibrium**.
 
@@ -302,13 +302,13 @@ def lyapunov_attitude_controller(state, params):
     delta     = np.clip(delta, -delta_max, delta_max)  # gimbal saturation
 
     return delta
-```
+$$
 
 **Required gain conditions for stability:**
 
-```math
+$$
 k_\varphi > 0, \quad k_\omega > 0
-```
+$$
 
 **Recommended starting values** for a rocket with $m = 5$ kg, $l_{cp} = 1.0$ m, $J = 0.1$ kg·m²:
 
@@ -329,7 +329,7 @@ def lyapunov_value(state, params):
     omega = state[5]
     k_phi = params['k_phi']
     return 0.5 * k_phi * phi**2 + 0.5 * omega**2
-```
+$$
 
 Plot $V(t)$ alongside the state trajectories. A monotonically decreasing $V(t)$ is the numerical verification of the theoretical guarantee $\dot{V} \leq 0$.
 
