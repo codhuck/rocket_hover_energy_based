@@ -70,6 +70,16 @@ $$
 | $\delta_{max}$ | Nozzle angle limit | rad |
 | $F$ | Constant thrust $= mg$ | N |
 
+## Simplifying Assumptions
+
+The following assumptions are made for Project 1 and must be stated explicitly in any analysis using these equations:
+
+1. **Constant mass**: Mass is treated as fixed, $\dot{m} = 0$. Consequently $\dot{J} = 0$ and $J$, $l_{cp}$ are constants. This eliminates the variable-inertia coupling term and simplifies the Lyapunov analysis from a time-varying to a time-invariant problem. For typical mission durations where fuel mass is a small fraction of total mass, this is a reasonable first approximation.
+
+2. **No aerodynamic drag**: Translational drag $(\beta = 0)$ and rotational aerodynamic moment $(\beta_r = 0)$ are neglected. At low velocities this is acceptable; at higher speeds drag provides additional passive damping that only helps stability.
+
+3. **Attitude-only control**: The control objective is restricted to stabilizing $\phi \to 0$, $\dot{\phi} \to 0$. Translational states $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled. The throttle is fixed at $\alpha = mg / F_{max}$, giving constant thrust $F = mg$. Horizontal velocity accumulated during attitude correction is not cancelled — this is a stated limitation of P1.
+
 ### Equations of Motion
 
 The throttle is fixed at the hover value so that thrust exactly balances gravity:
@@ -110,21 +120,6 @@ $$
 
 The quantity $mg \cdot l_{cp} / J$ represents the maximum angular acceleration per unit $\sin(\delta)$. The negative sign reflects the restoring convention: positive $\delta$ generates a negative angular acceleration, correcting positive pitch.
 
----
-
-## Simplifying Assumptions
-
-The following assumptions are made for Project 1 and must be stated explicitly in any analysis using these equations:
-
-1. **Constant mass**: Mass is treated as fixed, $\dot{m} = 0$. Consequently $\dot{J} = 0$ and $J$, $l_{cp}$ are constants. This eliminates the variable-inertia coupling term and simplifies the Lyapunov analysis from a time-varying to a time-invariant problem. For typical mission durations where fuel mass is a small fraction of total mass, this is a reasonable first approximation.
-
-2. **No aerodynamic drag**: Translational drag $(\beta = 0)$ and rotational aerodynamic moment $(\beta_r = 0)$ are neglected. At low velocities this is acceptable; at higher speeds drag provides additional passive damping that only helps stability.
-
-3. **Attitude-only control**: The control objective is restricted to stabilizing $\phi \to 0$, $\dot{\phi} \to 0$. Translational states $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled. The throttle is fixed at $\alpha = mg / F_{max}$, giving constant thrust $F = mg$. Horizontal velocity accumulated during attitude correction is not cancelled — this is a stated limitation of P1.
-
-4. **Exact mass knowledge**: $m$ is assumed known precisely at each timestep. In simulation this is exact; in hardware it would require a propellant gauge.
-
-These assumptions reduce the full 7-state variable-mass system to a tractable 2-state attitude subsystem suitable for a clean Lyapunov stability proof.
 
 ---
 
