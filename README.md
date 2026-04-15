@@ -1,6 +1,6 @@
 # Project 1 — Planar TVC Rocket with Lyapunov Attitude Control
 
-![Visualisation preview](figures/rocket_visualization_preview.png)
+![Visualisation preview](animations/test_dashboard.gif)
 
 ## Overview
 This repository implements a **planar thrust-vector-controlled rocket** with two attitude regulators:
