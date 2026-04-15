@@ -27,7 +27,7 @@ The system is a planar (2D) rocket with thrust vector control (TVC). A single en
 
 ### System Diagram
 
-$$
+```
          ^ y (vertical)
          |
     _____|_____
@@ -42,7 +42,7 @@ $$
           \
            ↙ F    <-- thrust vector
          x (horizontal) →
-$$
+```
 
 The pitch angle $\varphi$ is measured from the vertical (+y axis), positive rightward. The gimbal angle $\delta$ is measured from the rocket body axis, positive rightward. The thrust $F$ acts along the nozzle axis.
 
@@ -302,7 +302,7 @@ def lyapunov_attitude_controller(state, params):
     delta     = np.clip(delta, -delta_max, delta_max)  # gimbal saturation
 
     return delta
-$$
+```
 
 **Required gain conditions for stability:**
 
@@ -329,7 +329,7 @@ def lyapunov_value(state, params):
     omega = state[5]
     k_phi = params['k_phi']
     return 0.5 * k_phi * phi**2 + 0.5 * omega**2
-$$
+```
 
 Plot $V(t)$ alongside the state trajectories. A monotonically decreasing $V(t)$ is the numerical verification of the theoretical guarantee $\dot{V} \leq 0$.
 
