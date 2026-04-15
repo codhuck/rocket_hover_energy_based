@@ -72,81 +72,84 @@ project_1_lyapunov_control_planar_tvc_rocket/
 ```
 
 ## 1. Problem Definition
-The control task is to stabilize the pitch angle and angular rate of a planar rocket to zero under gravity, bounded gimbal actuation, and fixed hover throttle.
+The control task is to stabilize the pitch angle and angular rate of a planar rocket to zero under gravity, with a nozzle deflection angle limited to $|\delta| \leq \delta_{max}$, and fixed hover throttle.
 
 ### Method class
 The method belongs to **Lyapunov-based nonlinear control**: a Lyapunov function candidate is constructed over the attitude error states, and the gimbal command is derived to guarantee $\dot{V} \leq 0$.
 
 ### Context and assumptions
-- The rocket is planar, so the state contains one attitude angle and one angular rate.
-- The control moment arm `l_cp` and the inertia `J_const` are frozen at midpoint mass for Project 1.
-- Rotational aerodynamic damping is neglected.
-- The throttle is fixed at the hover value `alpha_hover` — it is not a control variable.
-- Translational states are not controlled.
+1. **Constant mass**: Mass is treated as fixed, $\dot{m} = 0$. Consequently inertia moment $\dot{J} = 0$ and $J$ is constant.
+2. **No aerodynamic drag**: Aerodynamic effects are not considered.
+3. **Attitude-only control**: The control objective is restricted to stabilizing $\phi \to 0$, $\dot{\phi} \to 0$. Translational states $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled. The throttle is fixed giving constant thrust $F = mg$.8
+4. **Exact mass knowledge**: $m$ is assumed known precisely at each timestep. In simulation this is exact; in hardware it would require a propellant gauge.
 
 ## 2. System Description
 ### State, control, and notation
 The state is
 
 $$
-q = [x, y, \phi, \dot{x}, \dot{y}, \dot{\phi}, m]^T
+q = [x, y, \phi, \dot{x}, \dot{y}, \dot{\phi}]^T
 $$
 
 where
-- `x, y` are inertial horizontal and vertical positions in meters,
-- `phi` is the pitch angle from the vertical axis in radians,
-- `vx = dot x` and `vy = dot y` are translational velocities in meters per second,
-- `omega = dot phi` is the angular rate in radians per second,
-- `m` is the instantaneous mass in kilograms.
+- $x, y$ — inertial horizontal and vertical position (m)
+- $\phi$ — pitch angle from the vertical axis, positive rightward (rad)
+- $\dot{x}, \dot{y}$ — translational velocities (m/s)
+- $\dot{\phi}$ — angular rate (rad/s)
 
-The control input is
+The sole control input is the nozzle deflection angle:
 
 $$
-u = [\alpha, \delta]^T
+u = \delta
 $$
 
-where
-- `alpha in [0, 1]` is the throttle command,
-- `delta` is the nozzle gimbal angle with `|delta| <= delta_max`.
+where $\delta$ is the nozzle deflection angle measured from the rocket body axis, with $|\delta| \leq \delta_{max}$.
 
 ### Nonlinear dynamics used in the code
-With thrust `F = alpha F_max`, translational drag coefficient `beta_drag`, and midpoint approximations for `J_const` and `l_cp`, the implemented dynamics are
+
+Parameters appearing in the equations:
+- $F = mg$ — constant thrust equal to gravity compensation
+- $l_{cp}$ — distance from the center of mass to the nozzle exit (m); determines the torque arm of the thrust vector
+- $J_{const}$ — moment of inertia of the rocket about the center of mass (kg·m²); frozen at midpoint mass
+- $g$ — gravitational acceleration, 9.81 m/s²
+
+With constant thrust $F = mg$:
+
+**Newton's second law** (translational):
 
 $$
-\dot{m} = -\alpha \dot{m}_{max}
+m\ddot{x} = F\sin(\phi + \delta), \qquad m\ddot{y} = F\cos(\phi + \delta) - mg
 $$
 
-$$
-\ddot{x} = \frac{\alpha F_{max}}{m}\sin(\phi + \delta) - \frac{\beta_{drag}}{m}\dot{x}\sqrt{\dot{x}^2 + \dot{y}^2}
-$$
+Substituting $F = mg$:
 
 $$
-\ddot{y} = \frac{\alpha F_{max}}{m}\cos(\phi + \delta) - g - \frac{\beta_{drag}}{m}\dot{y}\sqrt{\dot{x}^2 + \dot{y}^2}
+\ddot{x} = g\sin(\phi + \delta), \qquad \ddot{y} = g\cos(\phi + \delta) - g
 $$
 
+**Angular momentum equation** $\dot{L} = \tau$ (rotational):
+
 $$
-\ddot{\phi} = -\frac{\alpha F_{max} l_{cp}}{J_{const}}\sin(\delta)
+J_{const}\ddot{\phi} = -F \cdot l_{cp}\sin(\delta)
 $$
 
-The code computes `F_max = m_dot_max * v_e` from the mass-flow rate and effective exhaust velocity, then computes midpoint-mass values of `l_cp` and `J_const` from the dry structure and fuel geometry.
+Substituting $F = mg$:
 
-### Constraints
-- `alpha_min <= alpha <= 1`
-- `|delta| <= delta_max`
-- `m >= m_dry`
+$$
+\ddot{\phi} = -\frac{mg \cdot l_{cp}}{J_{const}}\sin(\delta)
+$$
 
-When the dry mass is reached, the thrust is set to zero and further fuel depletion stops.
 
 ## 3. Mathematical Specification
 
-The controller stabilizes attitude only. The throttle is fixed at the hover value $\alpha = \alpha_{hover}$ and is not a control variable. The sole control input is the gimbal angle $\delta$.
+The controller stabilizes attitude only($\phi = 0$, $\dot{\phi} = 0$). The sole control input is the nozzle deflection angle $\delta$.
 
 ### Lyapunov attitude law
 
 The attitude error and angular rate are:
 
 $$
-e_\phi = \mathrm{wrap}(\phi - \phi_{target}), \qquad \dot{\phi} = \omega
+e_\phi = \phi, \qquad \dot{e}_\phi = \dot{\phi}
 $$
 
 The Lyapunov function candidate is:
@@ -155,14 +158,16 @@ $$
 V = \frac{1}{2} k_\phi e_\phi^2 + \frac{1}{2} \dot{\phi}^2
 $$
 
-Taking the time derivative along the attitude dynamics and requiring $\dot{V} \leq 0$ yields the gimbal command:
+Taking the time derivative along the attitude dynamics and requiring $\dot{V} \leq 0$ yields the nozzle deflection command:
 
 $$
-\sin(\delta) = \frac{J_{const}}{\alpha F_{max} l_{cp}}\left(k_\phi e_\phi + k_\omega \dot{\phi}\right)
+\sin(\delta) = \frac{J_{const}}{F \cdot l_{cp}}\left(k_\phi e_\phi + k_\omega \dot{\phi}\right)
 $$
 
+Substituting $F = mg$:
+
 $$
-\delta = \arcsin\left(\mathrm{clamp}\left(\frac{J_{const}}{\alpha F_{max} l_{cp}}\left(k_\phi e_\phi + k_\omega \dot{\phi}\right),\ -1,\ 1\right)\right)
+\delta = \arcsin\left(\mathrm{clamp}\left(\frac{J_{const}}{mg \cdot l_{cp}}\left(k_\phi e_\phi + k_\omega \dot{\phi}\right),\ -1,\ 1\right)\right)
 $$
 
 followed by a hard saturation to `[-delta_max, delta_max]`. This gives $\dot{V} = -k_\omega \dot{\phi}^2 \leq 0$, and by LaSalle's invariance principle all trajectories converge to $(\phi, \dot{\phi}) = (0, 0)$.
@@ -188,24 +193,23 @@ d = \dot{\phi} + c\, e_\phi
 $$
 
 $$
-\sin(\delta) = \frac{J_{const}}{\alpha F_{max} l_{cp}} \cdot \frac{n}{d}
+\sin(\delta) = \frac{J_{const}}{F \cdot l_{cp}} \cdot \frac{n}{d} = \frac{J_{const}}{mg \cdot l_{cp}} \cdot \frac{n}{d}
 $$
 
-followed by the same `arcsin` and hard saturation to `[-delta_max, delta_max]`. If `|d| < eps`, the implementation falls back to the PD law for numerical robustness.
+followed by the same `arcsin` and hard saturation to `[-delta_max, delta_max]`. If `|d| < eps`, the implementation falls back to the Lyapunov attitude law for numerical robustness.
 
 ### Stability interpretation
 - The controller drives the rocket pitch toward $\phi_{target} = 0$ and damps angular motion via a Lyapunov argument guaranteeing $\dot{V} \leq 0$.
 - Translational states $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled.
-- Translational drag is not cancelled, so it contributes extra passive dissipation.
 
-The code intentionally implements the simplified Project 1 model, not a fully parameter-varying rocket. A longer derivation note is included in [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
+A longer derivation note is included in [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
 
 ## 4. Method Description
 ### Control pipeline
 At every integration step the code performs the following pipeline:
 1. read the current state `(x, y, phi, vx, vy, omega, mass)`;
-2. compute the attitude error `e_phi = wrap(phi - phi_target)`;
-3. compute the gimbal angle `delta` from the Lyapunov attitude law;
+2. compute the attitude error `e_phi = phi`;
+3. compute the nozzle deflection angle `delta` from the Lyapunov attitude law;
 4. propagate the nonlinear dynamics with `solve_ivp`;
 5. post-process the state history into plots, an animation, and summary metrics.
 
@@ -214,13 +218,13 @@ The Lyapunov attitude law drives `phi` and `omega` to zero by construction — $
 
 ## 5. Experimental Setup
 ### Initial condition
-- `x(0) = -2.0 m`
-- `y(0) = 1.0 m`
-- `phi(0) = 12.0 deg`
-- `vx(0) = 0.5 m/s`
+- `x(0) = 0.0 m`
+- `y(0) = 8.0 m`
+- `phi(0) = 20.0 deg`
+- `vx(0) = 0.0 m/s`
 - `vy(0) = 0.0 m/s`
-- `omega(0) = -5.0 deg/s`
-- `m(0) = 1.60 kg`
+- `omega(0) = -8.0 deg/s`
+- `m = 1.60 kg` (constant)
 
 ### Target state
 - `phi_target = 0.0 rad`
@@ -230,18 +234,14 @@ Translational states are not controlled — position and velocity evolve freely.
 
 ### Physical parameters
 - `g = 9.81 m/s^2`
-- `beta_drag = 0.08`
-- `m_dry = 1.05 kg`
-- `m_dot_max = 0.02 kg/s`
-- `v_e = 1200 m/s`
-- `delta_max = 15 deg`
-- `alpha_min = 0.20`
+- `mass = 1.60 kg`
 - `F_max = 24.0 N`
-- `l_cp = 0.6091 m` at midpoint mass
-- `J_const = 0.1183 kg m^2` at midpoint mass
+- `J_const = 0.1183 kg m^2`
+- `l_cp = 0.6091 m`
+- `delta_max = 15 deg`
 
-### Controller gains (PD Lyapunov)
-- `k_phi = 25.0`
+### Controller gains (Lyapunov attitude controller)
+- `k_phi = 18.0`
 - `k_omega = 7.0`
 - `phi_target_deg = 0.0`
 
@@ -253,8 +253,8 @@ Translational states are not controlled — position and velocity evolve freely.
 - `phi_target_deg = 0.0`
 
 ### Numerical setup
-- final simulation time: `20.0 s`
-- sample count: `1201`
+- final simulation time: `5.0 s`
+- sample count: `721`
 - integrator: `scipy.integrate.solve_ivp`
 - integrator max step: `0.02 s`
 
@@ -274,15 +274,15 @@ python -m src.main --config configs/default.yaml --output-root .
 ### What each module does
 - `src/system.py` defines the rocket parameters and nonlinear right-hand side;
 - `src/controller.py` implements two attitude regulators: `AttitudeLyapunovController` and `CrossTermLyapunovController`;
-- `src/simulation.py` integrates the system and provides `simulate` (PD) plus `simulate_both` (PD + cross-term);
+- `src/simulation.py` integrates the system and provides `simulate` (Lyapunov attitude) plus `simulate_both` (Lyapunov attitude + cross-term);
 - `src/visualization.py` generates all figures, including `comparison.png`, and the corrected real-time MP4 animation;
 - `src/main.py` runs both regulators and writes a combined `figures/summary.json` (`pd`, `cross_term`, `comparison`).
 
 ## 7. Results Summary
-Both regulators converge in attitude (`phi -> 0`, `omega -> 0`) in the default experiment. The cross-term regulator reduces peak gimbal demand but increases translational speed and drift compared with the PD baseline.
+Both regulators converge in attitude (`phi -> 0`, `omega -> 0`) in the default experiment. The cross-term regulator reduces peak gimbal demand but increases translational speed and drift compared with the Lyapunov attitude controller.
 
 ### Quantitative results
-- **PD controller**
+- **Lyapunov attitude controller**
   - final position: `(4.286100220018184, 7.317845231040285) m`
   - final pitch: `-9.289540202597493e-08 deg`
   - final angular rate: `2.6765738366331744e-06 deg/s`
@@ -296,7 +296,7 @@ Both regulators converge in attitude (`phi -> 0`, `omega -> 0`) in the default e
   - final speed: `1.5609724965023237 m/s`
   - max absolute gimbal: `2.6852208077477684 deg`
   - max speed: `1.5609724965023237 m/s`
-- **Difference (cross-term − PD)**
+- **Difference (cross-term − Lyapunov attitude)**
   - `final_phi_deg_diff = 4.972155178848146e-06`
   - `final_omega_deg_s_diff = -2.1791704038589914e-05`
   - `max_abs_delta_deg_diff = -2.8172520760201216 deg`
@@ -304,7 +304,7 @@ Both regulators converge in attitude (`phi -> 0`, `omega -> 0`) in the default e
 
 ### What works
 - Both regulators stabilize attitude and angular rate to near-zero.
-- The cross-term regulator decreases peak gimbal demand compared with PD.
+- The cross-term regulator decreases peak gimbal demand compared with the Lyapunov attitude controller.
 - The comparison pipeline is reproducible via one command and saves both plot and numeric comparison.
 - The exported MP4 now matches the physical simulation time instead of playing too fast.
 
@@ -316,7 +316,7 @@ Both regulators converge in attitude (`phi -> 0`, `omega -> 0`) in the default e
   - `denominator = omega + c*e_phi`
   - `sin(delta) = (J / (alpha * F_max * l_cp)) * (numerator / denominator)`
 - Singularity protection in code:
-  - if `|denominator| < eps`, fallback to PD law.
+  - if `|denominator| < eps`, fallback to Lyapunov attitude law.
 - Practical interpretation for current tuning:
   - smoother actuator demand (`|delta|` peak lower),
   - weaker translational performance (`max_speed` and drift higher).
@@ -349,7 +349,7 @@ Analysis:
 - Increasing `k_c` in the converged band reduces peak gimbal demand, but also tends to increase translational speed.
 
 Conclusion:
-- The cross-term regulator is significantly more sensitive to tuning than the PD baseline in this project setup.
+- The cross-term regulator is significantly more sensitive to tuning than the Lyapunov attitude controller in this project setup.
 - It can provide smoother actuator behavior, but practical tuning is difficult and requires careful grid search with explicit convergence checks.
 
 ### What remains limited
@@ -361,42 +361,34 @@ Conclusion:
 ## 8. Figures and Interpretation
 ### State trajectories
 ![State trajectories](figures/state_trajectories.png)
-The position histories show that the rocket reaches the hover target and removes the initial offsets without persistent oscillation.
+Pitch angle and angular rate converge to zero from the initial condition without persistent oscillation.
 
 ### Attitude and gimbal command
 ![Attitude and gimbal](figures/attitude_and_gimbal.png)
-The desired pitch and actual pitch quickly align, while the gimbal command remains far below the hard `15 deg` limit. The conclusion is that the inner loop has sufficient authority for the default case.
+Pitch and angular rate converge to zero, while the gimbal command remains far below the hard `15 deg` limit.
 
-### Control effort and hover error
+### Control effort
 ![Control and error](figures/control_and_error.png)
-Throttle, speed, and position error all decay toward their hover values. The conclusion is that the closed-loop system settles smoothly instead of chattering around the target.
+The nozzle deflection angle and angular rate decay smoothly — the closed-loop system settles without chattering.
 
 ### Planar trajectory
 ![Planar trajectory](figures/planar_trajectory.png)
-The planar path bends smoothly toward the hover point. The conclusion is that the rocket reaches the target without aggressive overshoot.
+The planar path shows the rocket's free translational motion during attitude stabilization.
 
-### PD vs Cross-term comparison
+### Lyapunov attitude vs cross-term comparison
 ![Controller comparison](figures/comparison_best.png)
-The comparison figure shows both controllers on the same axes. In this run, the cross-term controller exhibits lower angular overshoot and a smoother gimbal profile than the PD baseline.
+Both controllers on the same axes. The cross-term controller exhibits lower peak gimbal demand than the Lyapunov attitude controller.
 
 ## 9. Animation
 The project includes a corrected real-time animation:
 - `animations/rocket_attitude_realtime.mp4`
 
-The animation shows the rocket body, the hover target, the path, the current orientation, the current time, the throttle command, the gimbal angle, and the instantaneous position error.
+The animation shows the rocket body, its current orientation, the nozzle deflection angle, the angular rate, and the current time.
 
-## 10. Theory and Implementation Match
-This repository intentionally implements the **simplified Project 1 model**. Specifically:
-- `J_const` and `l_cp` are frozen at midpoint mass;
-- the controller is the two-layer Lyapunov hover law described above;
-- the README, code, plots, and animation describe the same model and assumptions.
+## 10. Possible Extensions
+- **Translational drag**: add drag forces $-\frac{\beta}{m}\dot{x}$ and $-\frac{\beta}{m}\dot{y}$ to the equations of motion and re-derive the stability analysis under dissipation.
+- **Variable mass and inertia**: replace constant $m$, $J$, $l_{cp}$ with time-varying quantities updated from the fuel depletion model; extend the Lyapunov proof to the time-varying case.
+- **Cascaded position control**: add an outer loop that computes a desired pitch angle $\phi_{des}$ from position errors $(e_x, e_y)$, feeding it as a reference to the inner attitude controller — enabling full $(x, y, \phi)$ stabilization.
 
-## 11. Possible Extensions
-- update `J(m)` and `l_cp(m)` online instead of freezing them;
-- add actuator lag or rate limits;
-- add disturbances and robustness experiments;
-- include a simple baseline controller for an optional Project 1 comparison;
-- extend the planar setup from hover stabilization to trajectory tracking.
-
-## 12. Notes on AI Use
+## 11. Notes on AI Use
 AI assistance was used to help scaffold code, restructure files, and polish the documentation and visualisation. The final equations, parameters, and interpretation of the plots should still be checked by the team before submission.
