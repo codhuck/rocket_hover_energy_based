@@ -4,8 +4,8 @@
 
 ## Overview
 This repository implements a **planar thrust-vector-controlled rocket** with two attitude regulators:
-- a baseline **Lyapunov** controller;
-- a **cross-term Lyapunov** controller.
+- **Lyapunov attitude controller** (`AttitudeLyapunovController`);
+- **cross-term Lyapunov controller** (`CrossTermLyapunovController`).
 
 The simulation pipeline runs both controllers from the same initial condition and generates a direct comparison plot. The control objective is attitude stabilization only:
 - **pitch:** `phi = 0 rad`
