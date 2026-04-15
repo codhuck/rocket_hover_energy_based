@@ -1,19 +1,17 @@
-# Project 1 — Planar TVC Rocket with Lyapunov Hover Control
+# Project 1 — Planar TVC Rocket with Lyapunov Attitude Control
 
 ![Visualisation preview](figures/rocket_visualization_preview.png)
 
 ## Overview
-This repository implements a **planar thrust-vector-controlled rocket** with two inner-loop attitude regulators:
-- a baseline **Lyapunov PD** controller;
+This repository implements a **planar thrust-vector-controlled rocket** with two attitude regulators:
+- a baseline **Lyapunov** controller;
 - a **cross-term Lyapunov** controller.
 
-The simulation pipeline runs both controllers from the same initial condition and generates a direct comparison plot, while preserving all original PD outputs (plots, animation, and JSON summary).
-
-The default hover target is
-- **position:** `(x_d, y_d) = (0.0, 8.0) m`
+The simulation pipeline runs both controllers from the same initial condition and generates a direct comparison plot. The control objective is attitude stabilization only:
 - **pitch:** `phi = 0 rad`
-- **velocity:** `vx = 0, vy = 0`
-- **angular rate:** `omega = 0`
+- **angular rate:** `omega = 0 rad/s`
+
+Translational states evolve freely under a fixed hover throttle and are not controlled.
 
 ## Quick Start
 Create an environment and install the dependencies:
@@ -74,19 +72,17 @@ project_1_lyapunov_control_planar_tvc_rocket/
 ```
 
 ## 1. Problem Definition
-The control task is to stabilize a planar rocket to a stationary hover point under gravity, bounded gimbal actuation, bounded throttle, translational drag, and fuel depletion.
+The control task is to stabilize the pitch angle and angular rate of a planar rocket to zero under gravity, bounded gimbal actuation, and fixed hover throttle.
 
 ### Method class
-The method belongs to **Lyapunov-based nonlinear control** and uses a two-layer structure:
-1. an **outer position loop** computes the desired thrust direction and thrust magnitude;
-2. an **inner attitude loop** computes the nozzle gimbal command that drives the rocket pitch toward the desired pitch.
+The method belongs to **Lyapunov-based nonlinear control**: a Lyapunov function candidate is constructed over the attitude error states, and the gimbal command is derived to guarantee $\dot{V} \leq 0$.
 
 ### Context and assumptions
 - The rocket is planar, so the state contains one attitude angle and one angular rate.
 - The control moment arm `l_cp` and the inertia `J_const` are frozen at midpoint mass for Project 1.
 - Rotational aerodynamic damping is neglected.
-- Fuel depletion is included explicitly, so the hover throttle slowly decreases during the run.
-- The attitude loop is tuned faster than the position loop.
+- The throttle is fixed at the hover value `alpha_hover` — it is not a control variable.
+- Translational states are not controlled.
 
 ## 2. System Description
 ### State, control, and notation
