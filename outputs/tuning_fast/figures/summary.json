@@ -1,0 +1,18 @@
+{
+  "final_x": 4.458432728101177,
+  "final_y": 7.309675547421,
+  "final_phi_deg": -5.196422284715003e-07,
+  "final_omega_deg_s": 3.306787544461398e-06,
+  "final_speed": 0.9202631352746264,
+  "max_abs_phi_deg": 20.0,
+  "max_abs_delta_deg": 5.253900087711487,
+  "max_speed": 1.0065508345506882,
+  "hover_alpha": 0.654,
+  "params_l_cp": 0.6091,
+  "params_J_const": 0.1183,
+  "F_max": 24.0,
+  "mass": 1.6,
+  "phi_error_band_rad": 0.1,
+  "settling_time_phi_error_band_s": 0.38888888888888884,
+  "simulation_time": 5.0
+}
