@@ -82,7 +82,7 @@ The method belongs to **Lyapunov-based adaptive nonlinear control** using the **
 ### Context and assumptions
 
 1. **Constant mass**: Mass is treated as fixed, $\dot{m} = 0$. Consequently inertia moment $\dot{J} = 0$ and $J$ is constant. Exact mass knowledge is assumed.
-2. **Aerodynamics included**: Drag, normal force, and pitching moment act on the rocket. The pitching moment coefficient $C_{m\alpha}$ is **unknown to the controller**. The reference value $C_{m\alpha}^{\text{true}} \approx 1.054$ rad$^{-1}$ (from the analytical approximation $m_z(\alpha) = 0.01840\,\alpha$) is used in the simulator as ground truth for validation.
+2. **Aerodynamics included**: Drag, normal force, and pitching moment act on the rocket. The pitching moment coefficient $C_{m\alpha}$ is **unknown to the controller**. The reference value $C_{m\alpha}^{\text{true}} \approx 1.054$ rad$^{-1}$ (from the analytical approximation $m_z(\alpha) = 0.01840\cdot\alpha$) is used in the simulator as ground truth for validation.
 3. **Low-speed regime**: The rocket operates at low altitude with standard air density $\rho = 1.225$ kg/m$^3$ and airspeed $V \leq 100$ m/s. In this regime $C_{m\alpha}$ is a true physical constant, justifying its identification as a single scalar parameter.
 4. **Translational coefficients known**: $C_x$ and $C_y$ are taken as known constants from the reference data. They affect translational motion only and lie outside the angular control loop addressed in this project.
 5. **Attitude-only control**: The control objective is restricted to stabilizing $\vartheta \to 0$, $\dot{\vartheta} \to 0$. States $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled. The throttle is fixed giving constant thrust $F = 1.5 \cdot mg$. Position control is left as a separate project on **backstepping**, since it would introduce unmatched parametric uncertainty.
@@ -110,40 +110,50 @@ $$
 
 where $\delta$ is the nozzle deflection angle measured from the rocket body axis, with $|\delta| \leq \delta_{max}$.
 
-### Nonlinear dynamics used in the code
+## System Dynamics
 
-Parameters appearing in the equations:
-- $F = 1.5 \cdot mg$ — constant thrust equal to gravity compensation
-- $l_{cp}$ — distance from the center of mass to the nozzle exit (m); determines the torque arm of the thrust vector
-- $J_{const}$ — moment of inertia of the rocket about the center of mass (kg·m²); frozen at midpoint mass
-- $g$ — gravitational acceleration, 9.81 m/s²
-
-With constant thrust $F = 1.5 \cdot mg$:
-
-**Newton's second law**:
+### State and control
 
 $$
-m\ddot{x} = F\sin(\vartheta + \delta), \qquad m\ddot{y} = F\cos(\vartheta + \delta) - mg
+q = [x,\ y,\ \vartheta,\ \dot{x},\ \dot{y},\ \dot{\vartheta}]^T, \qquad u = \delta, \quad |\delta| \leq \delta_{max}
 $$
 
-Substituting $F = mg$:
+with $\vartheta$ measured from the vertical inertial axis to $X_b$ (positive rightward), and $\delta$ measured from $X_b$.
+
+### Auxiliary quantities
 
 $$
-\ddot{x} = g\sin(\vartheta + \delta), \qquad \ddot{y} = g\cos(\vartheta + \delta) - g
+v = \sqrt{\dot{x}^2 + \dot{y}^2}, \qquad
+q_\infty = \tfrac{1}{2}\rho v^2, \qquad
+\alpha = \vartheta - \mathrm{atan2}(\dot{x},\ \dot{y}).
 $$
 
-**Angular momentum equation** $\dot{L} = \tau$ (rotational):
+### Aerodynamic forces and moment (body frame)
 
 $$
-J_{const}\ddot{\vartheta} = -F \cdot l_{cp}\sin(\delta)
+X_b = -C_x \cdot q_\infty S_m, \qquad
+Y_b = C_y(\alpha)\cdot q_\infty S_m, \qquad
+M_b^z = C_{m\alpha}\cdot \alpha \cdot q_\infty S_m l.
 $$
 
-Substituting $F = mg$:
+### Equations of motion
+
+Translational (inertial frame, with $F = 1.5*mg$):
 
 $$
-\ddot{\vartheta} = -\frac{mg \cdot l_{cp}}{J_{const}}\sin(\delta)
+\begin{aligned}
+m\ddot{x} &= F\sin(\vartheta+\delta) + X_b\sin\vartheta + Y_b\cos\vartheta, \\
+m\ddot{y} &= F\cos(\vartheta+\delta) - mg + X_b\cos\vartheta - Y_b\sin\vartheta.
+\end{aligned}
 $$
 
+Rotational (about $Z_b$):
+
+$$
+J\ddot{\vartheta} = -mg\cdot l_{cp}\sin\delta + q_\infty S_m l \cdot C_{m\alpha} \cdot \alpha
+$$
+
+The unknown parameter $C_{m\alpha}$ appears only in the rotational equation — this is the focus of the adaptive controller.
 
 ## 3. Mathematical Specification
 
@@ -184,7 +194,7 @@ For the full derivation see [README-derivation-lyapunov.md](README-derivation-ly
 For the cross-term regulator, the Lyapunov candidate adds a cross term:
 
 $$
-V = \frac{1}{2}k_\vartheta e_\vartheta^2 + \frac{1}{2}\dot{\vartheta}^2 + c\, e_\vartheta \dot{\vartheta}
+V = \frac{1}{2}k_\vartheta e_\vartheta^2 + \frac{1}{2}\dot{\vartheta}^2 + c\cdot e_\vartheta \dot{\vartheta}
 $$
 
 Taking $\dot{V} \leq 0$ with this candidate yields:
@@ -194,7 +204,7 @@ n = k_\vartheta e_\vartheta \dot{\vartheta} + (c + k_\omega)\dot{\vartheta}^2 + 
 $$
 
 $$
-d = \dot{\vartheta} + c\, e_\vartheta
+d = \dot{\vartheta} + c\cdot e_\vartheta
 $$
 
 $$
