@@ -72,30 +72,35 @@ project_1_lyapunov_control_planar_tvc_rocket/
 ```
 
 ## 1. Problem Definition
-The control task is to stabilize the pitch angle and angular rate of a planar rocket to zero under gravity, with a nozzle deflection angle limited to $|\delta| \leq \delta_{max}$, and fixed hover throttle.
+
+The control task is to stabilize the pitch angle and angular rate of a planar rocket to zero under gravity and aerodynamic forces, with a nozzle deflection angle limited to $|\delta| \leq \delta_{max}$, and fixed hover throttle. The pitching moment coefficient $C_{m\alpha}$ (see README-Aerodynamics.md) is treated as **unknown to the controller** and is estimated online.
 
 ### Method class
-The method belongs to **Lyapunov-based nonlinear control**: a Lyapunov function candidate is constructed over the attitude error states, and the gimbal command is derived to guarantee $\dot{V} \leq 0$.
+
+The method belongs to **Lyapunov-based adaptive nonlinear control** using the **Certainty Equivalence (CE)** principle: a control law is first designed assuming all parameters are known, then the unknown parameter $C_{m\alpha}$ is replaced with its online estimate $\hat{C}_{m\alpha}(t)$. The adaptation law is derived from an extended Lyapunov function candidate that includes the parameter estimation error, and the gimbal command together with the parameter update rule are jointly chosen to guarantee $\dot{V} \leq 0$.
 
 ### Context and assumptions
-1. **Constant mass**: Mass is treated as fixed, $\dot{m} = 0$. Consequently inertia moment $\dot{J} = 0$ and $J$ is constant.
-2. **No aerodynamic drag**: Aerodynamic effects are not considered.
-3. **Attitude-only control**: The control objective is restricted to stabilizing $\phi \to 0$, $\dot{\phi} \to 0$. Translational states $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled. The throttle is fixed giving constant thrust $F = mg$.8
-4. **Exact mass knowledge**: $m$ is assumed known precisely at each timestep. In simulation this is exact; in hardware it would require a propellant gauge.
+
+1. **Constant mass**: Mass is treated as fixed, $\dot{m} = 0$. Consequently inertia moment $\dot{J} = 0$ and $J$ is constant. Exact mass knowledge is assumed.
+2. **Aerodynamics included**: Drag, normal force, and pitching moment act on the rocket. The pitching moment coefficient $C_{m\alpha}$ is **unknown to the controller**. The reference value $C_{m\alpha}^{\text{true}} \approx 1.054$ rad$^{-1}$ (from the analytical approximation $m_z(\alpha) = 0.01840\,\alpha$) is used in the simulator as ground truth for validation.
+3. **Low-speed regime**: The rocket operates at low altitude with standard air density $\rho = 1.225$ kg/m$^3$ and airspeed $V \leq 100$ m/s. In this regime $C_{m\alpha}$ is a true physical constant, justifying its identification as a single scalar parameter.
+4. **Translational coefficients known**: $C_x$ and $C_y$ are taken as known constants from the reference data. They affect translational motion only and lie outside the angular control loop addressed in this project.
+5. **Attitude-only control**: The control objective is restricted to stabilizing $\vartheta \to 0$, $\dot{\vartheta} \to 0$. States $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled. The throttle is fixed giving constant thrust $F = 1.5 \cdot mg$. Position control is left as a separate project on **backstepping**, since it would introduce unmatched parametric uncertainty.
+6. **Full state available**: The state $(x, y, \vartheta, \dot{x}, \dot{y}, \dot{\vartheta})$ is assumed measurable without noise. This allows direct computation of the angle of attack $\alpha$ and the regressor $Y(\alpha)$ used in the adaptation law.
 
 ## 2. System Description
 ### State, control, and notation
 The state is
 
 $$
-q = [x, y, \phi, \dot{x}, \dot{y}, \dot{\phi}]^T
+s = [x, y, \vartheta, \dot{x}, \dot{y}, \dot{\vartheta}]^T
 $$
 
 where
 - $x, y$ — inertial horizontal and vertical position (m)
-- $\phi$ — pitch angle from the vertical axis, positive rightward (rad)
-- $\dot{x}, \dot{y}$ — translational velocities (m/s)
-- $\dot{\phi}$ — angular rate (rad/s)
+- $\vartheta$ — pitch angle from the vertical axis, positive rightward (rad)
+- $\dot{x}, \dot{y}$ — velocities (m/s)
+- $\dot{\vartheta}$ — angular rate (rad/s)
 
 The sole control input is the nozzle deflection angle:
 
@@ -108,69 +113,69 @@ where $\delta$ is the nozzle deflection angle measured from the rocket body axis
 ### Nonlinear dynamics used in the code
 
 Parameters appearing in the equations:
-- $F = mg$ — constant thrust equal to gravity compensation
+- $F = 1.5 \cdot mg$ — constant thrust equal to gravity compensation
 - $l_{cp}$ — distance from the center of mass to the nozzle exit (m); determines the torque arm of the thrust vector
 - $J_{const}$ — moment of inertia of the rocket about the center of mass (kg·m²); frozen at midpoint mass
 - $g$ — gravitational acceleration, 9.81 m/s²
 
-With constant thrust $F = mg$:
+With constant thrust $F = 1.5 \cdot mg$:
 
-**Newton's second law** (translational):
+**Newton's second law**:
 
 $$
-m\ddot{x} = F\sin(\phi + \delta), \qquad m\ddot{y} = F\cos(\phi + \delta) - mg
+m\ddot{x} = F\sin(\vartheta + \delta), \qquad m\ddot{y} = F\cos(\vartheta + \delta) - mg
 $$
 
 Substituting $F = mg$:
 
 $$
-\ddot{x} = g\sin(\phi + \delta), \qquad \ddot{y} = g\cos(\phi + \delta) - g
+\ddot{x} = g\sin(\vartheta + \delta), \qquad \ddot{y} = g\cos(\vartheta + \delta) - g
 $$
 
 **Angular momentum equation** $\dot{L} = \tau$ (rotational):
 
 $$
-J_{const}\ddot{\phi} = -F \cdot l_{cp}\sin(\delta)
+J_{const}\ddot{\vartheta} = -F \cdot l_{cp}\sin(\delta)
 $$
 
 Substituting $F = mg$:
 
 $$
-\ddot{\phi} = -\frac{mg \cdot l_{cp}}{J_{const}}\sin(\delta)
+\ddot{\vartheta} = -\frac{mg \cdot l_{cp}}{J_{const}}\sin(\delta)
 $$
 
 
 ## 3. Mathematical Specification
 
-The controller stabilizes attitude only($\phi = 0$, $\dot{\phi} = 0$). The sole control input is the nozzle deflection angle $\delta$.
+The controller stabilizes attitude only($\vartheta = 0$, $\dot{\vartheta} = 0$). The sole control input is the nozzle deflection angle $\delta$.
 
 ### Lyapunov attitude law
 
 The attitude error and angular rate are:
 
 $$
-e_\phi = \phi, \qquad \dot{e}_\phi = \dot{\phi}
+e_\vartheta = \vartheta, \qquad \dot{e}_\vartheta = \dot{\vartheta}
 $$
 
 The Lyapunov function candidate is:
 
 $$
-V = \frac{1}{2} k_\phi e_\phi^2 + \frac{1}{2} \dot{\phi}^2
+V = \frac{1}{2} k_\vartheta e_\vartheta^2 + \frac{1}{2} \dot{\vartheta}^2
 $$
 
 Taking the time derivative along the attitude dynamics and requiring $\dot{V} \leq 0$ yields the nozzle deflection command:
 
 $$
-\sin(\delta) = \frac{J_{const}}{F \cdot l_{cp}}\left(k_\phi e_\phi + k_\omega \dot{\phi}\right)
+\sin(\delta) = \frac{J_{const}}{F \cdot l_{cp}}\left(k_\vartheta e_\vartheta + k_\omega \dot{\vartheta}\right)
 $$
 
 Substituting $F = mg$:
 
 $$
-\delta = \arcsin\left(\mathrm{clamp}\left(\frac{J_{const}}{mg \cdot l_{cp}}\left(k_\phi e_\phi + k_\omega \dot{\phi}\right),\ -1,\ 1\right)\right)
+\delta = \arcsin\left(\mathrm{clamp}\left(\frac{J_{const}}{mg \cdot l_{cp}}\left(k_\vartheta e_\vartheta + k_\omega \dot{\vartheta}\right),\ -1,\ 1\right)\right)
 $$
 
-followed by a hard saturation to `[-delta_max, delta_max]`. This gives $\dot{V} = -k_\omega \dot{\phi}^2 \leq 0$, and by LaSalle's invariance principle all trajectories converge to $(\phi, \dot{\phi}) = (0, 0)$.
+followed by a hard saturation to `[-delta_max, delta_max]`. This gives $\dot{V} = -k_\omega \dot{\vartheta}^2 \leq 0$, and by LaSalle's invariance principle all trajectories converge to $(\vartheta, \dot{\vartheta}) = (0, 0)$.
 
 For the full derivation see [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
 
@@ -179,17 +184,17 @@ For the full derivation see [README-derivation-lyapunov.md](README-derivation-ly
 For the cross-term regulator, the Lyapunov candidate adds a cross term:
 
 $$
-V = \frac{1}{2}k_\phi e_\phi^2 + \frac{1}{2}\dot{\phi}^2 + c\, e_\phi \dot{\phi}
+V = \frac{1}{2}k_\vartheta e_\vartheta^2 + \frac{1}{2}\dot{\vartheta}^2 + c\, e_\vartheta \dot{\vartheta}
 $$
 
 Taking $\dot{V} \leq 0$ with this candidate yields:
 
 $$
-n = k_\phi e_\phi \dot{\phi} + (c + k_\omega)\dot{\phi}^2 + k_c e_\phi^2
+n = k_\vartheta e_\vartheta \dot{\vartheta} + (c + k_\omega)\dot{\vartheta}^2 + k_c e_\vartheta^2
 $$
 
 $$
-d = \dot{\phi} + c\, e_\phi
+d = \dot{\vartheta} + c\, e_\vartheta
 $$
 
 $$
@@ -199,7 +204,7 @@ $$
 followed by the same `arcsin` and hard saturation to `[-delta_max, delta_max]`. If `|d| < eps`, the implementation falls back to the Lyapunov attitude law for numerical robustness.
 
 ### Stability interpretation
-- The controller drives the rocket pitch toward $\phi_{target} = 0$ and damps angular motion via a Lyapunov argument guaranteeing $\dot{V} \leq 0$.
+- The controller drives the rocket pitch toward $\vartheta_{target} = 0$ and damps angular motion via a Lyapunov argument guaranteeing $\dot{V} \leq 0$.
 - Translational states $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled.
 
 A longer derivation note is included in [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
@@ -214,7 +219,7 @@ At every integration step the code performs the following pipeline:
 5. post-process the state history into plots, an animation, and summary metrics.
 
 ### Why the controller works in practice
-The Lyapunov attitude law drives `phi` and `omega` to zero by construction — $\dot{V} \leq 0$ is guaranteed for all $k_\phi > 0$, $k_\omega > 0$. Translational states evolve freely under the fixed hover throttle.
+The Lyapunov attitude law drives `phi` and `omega` to zero by construction — $\dot{V} \leq 0$ is guaranteed for all $k_\vartheta > 0$, $k_\omega > 0$. Translational states evolve freely under the fixed hover throttle.
 
 ## 5. Experimental Setup
 ### Initial condition
@@ -388,7 +393,7 @@ The animation shows the rocket body, its current orientation, the nozzle deflect
 ## 10. Possible Extensions
 - **Translational drag**: add drag forces $-\frac{\beta}{m}\dot{x}$ and $-\frac{\beta}{m}\dot{y}$ to the equations of motion and re-derive the stability analysis under dissipation.
 - **Variable mass and inertia**: replace constant $m$, $J$, $l_{cp}$ with time-varying quantities updated from the fuel depletion model; extend the Lyapunov proof to the time-varying case.
-- **Cascaded position control**: add an outer loop that computes a desired pitch angle $\phi_{des}$ from position errors $(e_x, e_y)$, feeding it as a reference to the inner attitude controller — enabling full $(x, y, \phi)$ stabilization.
+- **Cascaded position control**: add an outer loop that computes a desired pitch angle $\vartheta_{des}$ from position errors $(e_x, e_y)$, feeding it as a reference to the inner attitude controller — enabling full $(x, y, \vartheta)$ stabilization.
 
 ## 11. Notes on AI Use
 AI assistance was used to help scaffold code, restructure files, and polish the documentation and visualisation. The final equations, parameters, and interpretation of the plots should still be checked by the team before submission.
