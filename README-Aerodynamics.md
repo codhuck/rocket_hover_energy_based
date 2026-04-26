@@ -9,13 +9,18 @@ All aerodynamic forces and moments are expressed in the **body-fixed coordinate 
 - **Origin** — at the center of mass of the rocket.
 - **`X_b` axis** — along the longitudinal axis of the rocket, pointing from the tail toward the nose.
 - **`Y_b` axis** — orthogonal to `X_b`, lying in the plane of symmetry of the rocket.
-- **`Z_b` axis** — perpendicular to the plane of motion, completing the right-handed triad. Since the model is planar, all rotation occurs about this axis: the pitch angle `φ` and the pitching moment `M_b^z` are both measured relative to `Z_b`.
+- **`Z_b` axis** — perpendicular to the plane of motion, completing the right-handed triad.
 
-The pitch angle `φ` is measured from the vertical (inertial) axis to the rocket's `X_b` axis, with **positive values corresponding to a rightward tilt** (consistent with Project 1).
+The pitch angle $\vartheta$ is measured from the vertical (inertial) axis to the rocket's `X_b` axis, with **positive values corresponding to a rightward tilt** (consistent with Project 1).
 
-![Body-fixed coordinate frame](docs/body_frame.png)
+![Body-fixed coordinate frame](figures/BF_Sys.png)
 
-> 📌 *Replace this placeholder with the actual diagram of the body-fixed frame.*
+The figure illustrates the body-fixed frame in the general 3D case, with the rocket inclined relative to the velocity vector `V_c` of the center of mass. Two angles characterize this orientation:
+
+- **`α`** — angle of attack, between the longitudinal axis `X_b` and the projection of `V_c` onto the `X_b`–`Y_b` plane.
+- **`β`** — sideslip angle, between `V_c` and the `X_b`–`Y_b` plane. *In our planar model `β = 0` and only `α` is relevant.*
+
+The total aerodynamic force `R` is applied at point `D` (the center of pressure) and is decomposed along the body axes into components `X_b`, `Y_b`, `Z_b`; `R_xz` denotes its projection onto the `X_b`–`Z_b` plane. In the planar setting, the resultant lies entirely in the `X_b`–`Y_b` plane, so the `Z_b` component vanishes and only `X_b` (drag) and `Y_b` (normal force) contribute.
 
 ## Forces and Moment
 
@@ -52,13 +57,17 @@ All three quantities share the same structure: a dimensionless coefficient multi
 
 The dimensionless coefficients are obtained from reference tables (wind tunnel data, CFD, or empirical formulas). For the project, we use the following analytical fits, valid in two velocity regimes:
 
+**Drag force coefficient:**
+Generally, $C_x$ depends on mach number and angle of attack but for our purposes (and regime of flight which discussed below) we could assume thaat
+$$
+C_x(M) = C_x = 0.358,
+$$
 **Normal force coefficient:**
-
 $$
 C_y(\alpha) =
 \begin{cases}
-0.05403\,\alpha, & V \in [100, 500] \text{ m/s}, \\
-0.02599\,\alpha + 0.008257\,\alpha^2, & V \in [500, 2200] \text{ m/s},
+0.05403\ \cdot \alpha, & V \in [100, 500] \text{ m/s}, \\
+0.02599\ \cdot \alpha + 0.008257\ \cdot\alpha^2, & V \in [500, 2200] \text{ m/s},
 \end{cases}
 $$
 
@@ -67,8 +76,8 @@ $$
 $$
 m_z(\alpha) =
 \begin{cases}
-0.01840\,\alpha, & V \in [100, 500] \text{ m/s}, \\
-0.02113\,\alpha - 0.0006463\,\alpha^2, & V \in [500, 2200] \text{ m/s},
+0.01840\ \cdot \alpha, & V \in [100, 500] \text{ m/s}, \\
+0.02113\ \cdot \alpha - 0.0006463\ \cdot \alpha^2, & V \in [500, 2200] \text{ m/s},
 \end{cases}
 $$
 
@@ -78,8 +87,8 @@ where `α` is expressed in **degrees**.
 
 This project considers low-altitude flight at standard atmospheric conditions (`ρ = 1.225 kg/m³`) and airspeeds up to `V ≤ 100 m/s`. In this regime:
 
-- Mach number `M < 0.3` (incompressible flow), and `C_x` is approximately constant: `C_x ≈ 0.30 … 0.38`.
-- The pitching moment approximation is **strictly linear**: `m_z(α) = 0.01840 · α`.
+- Mach number `M < 0.3` (incompressible flow), and $C_x$.
+- The pitching moment approximation is **strictly linear**: $m_z(α) = 0.01840 · α$.
 - The proportionality coefficient
 
 $$
@@ -88,4 +97,6 @@ $$
 
 is a **physical constant** of the rocket in this regime, independent of the flight state.
 
-This constant `C_{m\alpha}` is the central quantity that the adaptive controller estimates online via Certainty Equivalence.
+This constant $C_{m\alpha}$ is the central quantity that the adaptive controller estimates online via Certainty Equivalence.
+
+Only $C_{m\alpha}$ appears in the angular dynamics — this is the parameter targeted by the adaptive controller. The translational coefficients $C_x$ and $C_y$ affect `(x, y)` motion only and lie outside the scope of the angular control loop.
