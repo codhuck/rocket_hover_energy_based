@@ -100,3 +100,34 @@ is a **physical constant** of the rocket in this regime, independent of the flig
 This constant $C_{m\alpha}$ is the central quantity that the adaptive controller estimates online via Certainty Equivalence.
 
 Only $C_{m\alpha}$ appears in the angular dynamics — this is the parameter targeted by the adaptive controller. The translational coefficients $C_x$ and $C_y$ affect `(x, y)` motion only and lie outside the scope of the angular control loop.
+
+
+## Frame Transformation: Body-Fixed to Inertial
+ 
+The aerodynamic forces are computed in the body-fixed frame (along `X_b` and `Y_b` axes), but the equations of motion for the center of mass are written in the **inertial frame** $(x, y)$. A rotation by the pitch angle $\vartheta$ converts vectors between the two frames.
+ 
+### Geometry of the transformation
+ 
+The pitch angle $\vartheta$ is measured from the vertical (inertial $y$) axis to the rocket's longitudinal axis $X_b$, with positive values corresponding to a rightward tilt. As a result:
+ 
+- The body axis `X_b` is aligned with the inertial direction $(\sin\vartheta,\ \cos\vartheta)$.
+- The body axis `Y_b` is aligned with the inertial direction $(\cos\vartheta,\ -\sin\vartheta)$.
+### Rotation matrix
+ 
+For any vector $ \mathbf{F}_{\text{BF}} = (X)^T $ expressed in the body frame, the corresponding inertial-frame components are obtained as:
+ 
+$$
+\begin{pmatrix} F_x \\ F_y \end{pmatrix}=
+\underbrace{\begin{pmatrix} \sin\vartheta & \cos\vartheta \\ \cos\vartheta & -\sin\vartheta \end{pmatrix}}_{R(\vartheta)}
+\begin{pmatrix} F_{X_b} \\ F_{Y_b} \end{pmatrix}
+$$
+ 
+In component form:
+ 
+$$
+\begin{aligned}
+F_x &= F_{X_b}\sin\vartheta + F_{Y_b}\cos\vartheta, \\
+F_y &= F_{X_b}\cos\vartheta - F_{Y_b}\sin\vartheta.
+\end{aligned}
+$$
+ 
