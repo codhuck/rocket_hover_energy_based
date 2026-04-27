@@ -8,8 +8,8 @@ This repository implements a **planar thrust-vector-controlled rocket** with two
 - **cross-term Lyapunov controller** (`CrossTermLyapunovController`).
 
 The simulation pipeline runs both controllers from the same initial condition and generates a direct comparison plot. The control objective is attitude stabilization only:
-- **pitch:** `phi = 0 rad`
-- **angular rate:** `omega = 0 rad/s`
+- **pitch:** $\vartheta$= 0 rad
+- **angular rate:** $\omega$ = 0 rad/s
 
 Translational states evolve freely under a fixed hover throttle and are not controlled.
 
@@ -85,7 +85,7 @@ The method belongs to **Lyapunov-based adaptive nonlinear control** using the **
 2. **Aerodynamics included**: Drag, normal force, and pitching moment act on the rocket. The pitching moment coefficient $C_{m\alpha}$ is **unknown to the controller**. The reference value $C_{m\alpha}^{\text{true}} \approx 1.054$ rad$^{-1}$ (from the analytical approximation $m_z(\alpha) = 0.01840\cdot\alpha$) is used in the simulator as ground truth for validation.
 3. **Low-speed regime**: The rocket operates at low altitude with standard air density $\rho = 1.225$ kg/m$^3$ and airspeed $V \leq 100$ m/s. In this regime $C_{m\alpha}$ is a true physical constant, justifying its identification as a single scalar parameter.
 4. **Translational coefficients known**: $C_x$ and $C_y$ are taken as known constants from the reference data. They affect translational motion only and lie outside the angular control loop addressed in this project.
-5. **Attitude-only control**: The control objective is restricted to stabilizing $\vartheta \to 0$, $\dot{\vartheta} \to 0$. States $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled. The throttle is fixed giving constant thrust $F = 1.5 \cdot mg$. Position control is left as a separate project on **backstepping**, since it would introduce unmatched parametric uncertainty.
+5. **Attitude-only control**: The control objective is restricted to stabilizing $\vartheta \to \vartheta^{*}$, $\dot{\vartheta} \to 0$. States $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled. The throttle is fixed giving constant thrust $F = 1.5 \cdot mg$. Position control is left as a separate project on **backstepping**, since it would introduce unmatched parametric uncertainty.
 6. **Full state available**: The state $(x, y, \vartheta, \dot{x}, \dot{y}, \dot{\vartheta})$ is assumed measurable without noise. This allows direct computation of the angle of attack $\alpha$ and the regressor $Y(\alpha)$ used in the adaptation law.
 
 ## 2. System Description
