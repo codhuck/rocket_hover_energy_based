@@ -1,109 +1,98 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, Tuple
 import math
+from dataclasses import dataclass
+from typing import Tuple
+
 import numpy as np
 
-from .system import RocketParams, wrap_angle
+from rocket_dynamics import (
+    IDX_THETA, IDX_VX, IDX_VY, IDX_THETA_DOT, IDX_C_HAT,
+    RocketParams,
+)
 
 
 @dataclass
-class AttitudeLyapunovController:
-    k_phi: float
-    k_omega: float
-    phi_target: float = 0.0
-    last_cache: Dict[str, float] = field(default_factory=dict)
+class AdaptiveCEController:
+    """Lyapunov-based attitude controller with Certainty Equivalence
+    adaptation of the pitching moment coefficient C_m_alpha.
 
-    @staticmethod
-    def from_config(cfg: Dict) -> "AttitudeLyapunovController":
-        ctl = cfg['controller']
-        return AttitudeLyapunovController(
-            k_phi=float(ctl['k_phi']),
-            k_omega=float(ctl['k_omega']),
-            phi_target=math.radians(float(ctl.get('phi_target_deg', 0.0))),
-        )
+    The estimate `c_hat` lives in the simulator state vector (index IDX_C_HAT)
+    so it integrates synchronously with the physical states. The controller
+    only computes its derivative `c_hat_dot` from the adaptation law.
+    """
+
+    # Lyapunov gains (attitude loop)
+    k_theta: float
+    k_omega: float
+
+    # Adaptation gain
+    gamma: float
+
+    # Target attitude
+    theta_target: float = 41.0
+
+    # Projection bounds for c_hat (physically meaningful range)
+    c_hat_min: float = 0.1
+    c_hat_max: float = 5.0
+
+    # Latest auxiliary values (for logging / debugging)
+    last_cache: dict = None
 
     def compute_control(
         self,
         state: np.ndarray,
         params: RocketParams,
-    ) -> Tuple[float, float, Dict[str, float]]:
-        phi = float(state[2])
-        omega = float(state[5])
+    ) -> Tuple[float, float, float, dict]:
+        theta = state[IDX_THETA]
+        vx = state[IDX_VX]
+        vy = state[IDX_VY]
+        theta_dot = state[IDX_THETA_DOT]
+        c_hat = state[IDX_C_HAT]
 
-        alpha = params.alpha_hover
-        e_phi = wrap_angle(phi - self.phi_target)
+        # --- Tracking error ---
+        e_theta = theta - self.theta_target
 
-        authority = max(alpha * params.F_max * params.l_cp, 1e-8)
-        sin_delta = (params.J_const / authority) * (self.k_phi * e_phi + self.k_omega * omega)
+        # --- Aerodynamic regressor ---
+        V = math.hypot(vx, vy)
+        q_inf = 0.5 * params.rho * V * V
+        alpha = theta - math.atan2(vx, vy) if V > 1e-6 else 0.0
+        Y_reg = q_inf * params.S_mid * params.l * alpha   # regressor
+
+        # --- Control law (Certainty Equivalence) ---
+        # sin(delta) = J/(m*g*l_cp) * ( k_theta*e + k_omega*theta_dot + Y/J * c_hat )
+        sin_delta = (params.J_const / (params.mass * params.g * params.l_cp)) * (
+            self.k_theta * e_theta
+            + self.k_omega * theta_dot
+            + Y_reg * c_hat / params.J_const
+        )
         sin_delta = float(np.clip(sin_delta, -1.0, 1.0))
         delta = math.asin(sin_delta)
+
+        # Saturate to actuator limits.
         delta = float(np.clip(delta, -params.delta_max, params.delta_max))
 
-        cache = {
-            'alpha': alpha,
-            'delta': delta,
-            'phi_target': self.phi_target,
-            'e_phi': e_phi,
-        }
-        return alpha, delta, cache
+        # --- Adaptation law ---
+        # c_hat_dot = gamma * Y * theta_dot / J
+        c_hat_dot_unprojected = self.gamma * Y_reg * theta_dot / params.J_const
 
-
-@dataclass
-class CrossTermLyapunovController:
-    k_phi: float
-    k_omega: float
-    k_c: float
-    c: float
-    phi_target: float = 0.0
-    eps: float = 1e-6
-    last_cache: Dict[str, float] = field(default_factory=dict)
-
-    @staticmethod
-    def from_config(cfg: Dict) -> "CrossTermLyapunovController":
-        ctl = cfg['controller_crossterm']
-        return CrossTermLyapunovController(
-            k_phi=float(ctl['k_phi']),
-            k_omega=float(ctl['k_omega']),
-            k_c=float(ctl['k_c']),
-            c=float(ctl['c']),
-            phi_target=math.radians(float(ctl.get('phi_target_deg', 0.0))),
-        )
-
-    def compute_control(
-        self,
-        state: np.ndarray,
-        params: RocketParams,
-    ) -> Tuple[float, float, Dict[str, float]]:
-        phi = float(state[2])
-        omega = float(state[5])
-
-        alpha = params.alpha_hover
-        e_phi = wrap_angle(phi - self.phi_target)
-
-        authority = max(alpha * params.F_max * params.l_cp, 1e-8)
-        pd_term = self.k_phi * e_phi + self.k_omega * omega
-
-        numerator = self.k_phi * e_phi * omega + (self.c + self.k_omega) * (omega ** 2) + self.k_c * (e_phi ** 2)
-        denominator = omega + self.c * e_phi
-
-        fallback_to_pd = abs(denominator) < self.eps
-        if fallback_to_pd:
-            sin_delta = (params.J_const / authority) * pd_term
+        # Projection: freeze adaptation if it would push c_hat past bounds.
+        if c_hat >= self.c_hat_max and c_hat_dot_unprojected > 0:
+            c_hat_dot = 0.0
+        elif c_hat <= self.c_hat_min and c_hat_dot_unprojected < 0:
+            c_hat_dot = 0.0
         else:
-            sin_delta = (params.J_const / authority) * (numerator / denominator)
-        sin_delta = float(np.clip(sin_delta, -1.0, 1.0))
+            c_hat_dot = c_hat_dot_unprojected
 
-        delta = math.asin(sin_delta)
-        delta = float(np.clip(delta, -params.delta_max, params.delta_max))
+        # --- Throttle: fixed hover ---
+        throttle = params.throttle_hover
 
         cache = {
-            'alpha': alpha,
-            'delta': delta,
-            'phi_target': self.phi_target,
-            'e_phi': e_phi,
-            'denominator': float(denominator),
-            'fallback_to_pd': float(fallback_to_pd),
+            "alpha": alpha,
+            "Y_reg": Y_reg,
+            "e_theta": e_theta,
+            "c_hat": c_hat,
+            "c_hat_dot": c_hat_dot,
         }
-        return alpha, delta, cache
+
+        return throttle, delta, c_hat_dot, cache
