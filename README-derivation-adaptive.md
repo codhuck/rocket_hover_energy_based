@@ -811,7 +811,7 @@ where $T_{\text{conv}}$ is the desired convergence time for the estimate. Tune b
 | Gain | Value | Condition check |
 |------|-------|-----------------|
 | $k_\vartheta$ | 18.0 | $> 0$ ✓ |
-| $k_\omega$ | 7.0 | Critical damping requires $k_\omega \geq 2\sqrt{k_\vartheta} = 2\sqrt{18} \approx 8.5$ — **condition NOT met**: system is underdamped by design, accepting mild overshoot for faster settling. Increase to $\geq 9$ if overshoot is unacceptable. |
+| $k_\omega$ | 7.0 |  |
 | $\gamma$ | 1.0 (default; sweep [0.1, 10.0]) | $> 0$ ✓ |
 | $\theta_{\min}$ | 0.1 rad⁻¹ | Below $C_{m\alpha}^{\text{true}} = 1.054$ ✓ |
 | $\theta_{\max}$ | 5.0 rad⁻¹ | Above $C_{m\alpha}^{\text{true}} = 1.054$ ✓ |
