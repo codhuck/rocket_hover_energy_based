@@ -36,6 +36,5 @@ htmlcov/
 .idea/
 
 # Simulation outputs
-figures/*.png
 figures/*.json
 
