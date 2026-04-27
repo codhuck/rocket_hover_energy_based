@@ -155,69 +155,118 @@ $$
 
 The unknown parameter $C_{m\alpha}$ appears only in the rotational equation — this is the focus of the adaptive controller.
 
-## 3. Mathematical Specification
+## Control Law Derivation
 
-The controller stabilizes attitude only($\vartheta = 0$, $\dot{\vartheta} = 0$). The sole control input is the nozzle deflection angle $\delta$.
+The control law is derived in two stages: first, an **idealized law** is constructed assuming $C_{m\alpha}$ is known (as in Project 1, but with aerodynamic compensation); second, the **Certainty Equivalence** principle replaces the unknown parameter with its online estimate, and the adaptation law is obtained from an extended Lyapunov function.
 
-### Lyapunov attitude law
+### Stage 1 — Idealized law (assuming $C_{m\alpha}$ known)
 
-The attitude error and angular rate are:
-
-$$
-e_\vartheta = \vartheta, \qquad \dot{e}_\vartheta = \dot{\vartheta}
-$$
-
-The Lyapunov function candidate is:
+Define the tracking error:
 
 $$
-V = \frac{1}{2} k_\vartheta e_\vartheta^2 + \frac{1}{2} \dot{\vartheta}^2
+e_\vartheta = \vartheta - \vartheta_{target}, \qquad \dot{e}_\vartheta = \dot\vartheta.
 $$
 
-Taking the time derivative along the attitude dynamics and requiring $\dot{V} \leq 0$ yields the nozzle deflection command:
+Take the Lyapunov function candidate:
 
 $$
-\sin(\delta) = \frac{J_{const}}{F \cdot l_{cp}}\left(k_\vartheta e_\vartheta + k_\omega \dot{\vartheta}\right)
+V_0 = \tfrac{1}{2} k_\vartheta\cdot e_\vartheta^2 + \tfrac{1}{2}\cdot \dot\vartheta^2, \qquad k_\vartheta > 0.
 $$
 
-Substituting $F = mg$:
+Differentiate along the trajectories of the rotational dynamics:
 
 $$
-\delta = \arcsin\left(\mathrm{clamp}\left(\frac{J_{const}}{mg \cdot l_{cp}}\left(k_\vartheta e_\vartheta + k_\omega \dot{\vartheta}\right),\ -1,\ 1\right)\right)
+\dot{V}_0 = k_\vartheta\cdot e_\vartheta\cdot \dot\vartheta + \dot\vartheta\cdot \ddot\vartheta
+        = \dot\vartheta\left(k_\vartheta\cdot e_\vartheta + \ddot\vartheta\right).
 $$
 
-followed by a hard saturation to `[-delta_max, delta_max]`. This gives $\dot{V} = -k_\omega \dot{\vartheta}^2 \leq 0$, and by LaSalle's invariance principle all trajectories converge to $(\vartheta, \dot{\vartheta}) = (0, 0)$.
-
-For the full derivation see [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
-
-### Cross-term Lyapunov attitude law
-
-For the cross-term regulator, the Lyapunov candidate adds a cross term:
+Substituting the rotational equation $J\ddot\vartheta = -mg\cdot l_{cp}\sin\delta + Y(\alpha) \cdot C_{m\alpha}$, where
 
 $$
-V = \frac{1}{2}k_\vartheta e_\vartheta^2 + \frac{1}{2}\dot{\vartheta}^2 + c\cdot e_\vartheta \dot{\vartheta}
+Y(\alpha) = q_\infty S_m l \cdot \alpha
 $$
 
-Taking $\dot{V} \leq 0$ with this candidate yields:
+is the regressor, gives:
 
 $$
-n = k_\vartheta e_\vartheta \dot{\vartheta} + (c + k_\omega)\dot{\vartheta}^2 + k_c e_\vartheta^2
+\dot{V}_0 = \dot\vartheta\left(k_\vartheta\cdot e_\vartheta - \frac{mg\cdot l_{cp}}{J}\sin\delta + \frac{Y(\alpha)}{J} C_{m\alpha}\right).
 $$
 
-$$
-d = \dot{\vartheta} + c\cdot e_\vartheta
-$$
+To enforce $\dot{V}_0 = -k_\omega \dot\vartheta^2 \leq 0$ (with $k_\omega > 0$), choose:
 
 $$
-\sin(\delta) = \frac{J_{const}}{F \cdot l_{cp}} \cdot \frac{n}{d} = \frac{J_{const}}{mg \cdot l_{cp}} \cdot \frac{n}{d}
+\boxed{\sin\delta^* = \frac{J}{mg\cdot l_{cp}}\left(k_\vartheta\cdot e_\vartheta + k_\omega \dot\vartheta + \frac{Y(\alpha)}{J} C_{m\alpha}\right)\;}
 $$
 
-followed by the same `arcsin` and hard saturation to `[-delta_max, delta_max]`. If `|d| < eps`, the implementation falls back to the Lyapunov attitude law for numerical robustness.
+This is the idealized law. Compared to Project 1, the additional term $\dfrac{Y(\alpha)}{J} C_{m\alpha}$ **compensates the aerodynamic moment**.
 
-### Stability interpretation
-- The controller drives the rocket pitch toward $\vartheta_{target} = 0$ and damps angular motion via a Lyapunov argument guaranteeing $\dot{V} \leq 0$.
-- Translational states $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled.
+### Stage 2 — Certainty Equivalence
 
-A longer derivation note is included in [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
+Since $C_{m\alpha}$ is unknown, replace it with the online estimate $\hat{C}_{m\alpha}(t)$:
+
+$$
+\boxed{\sin\delta = \frac{J}{mg\cdot l_{cp}}\left(k_\vartheta\cdot e_\vartheta + k_\omega \dot\vartheta + \frac{Y(\alpha)}{J} \hat{C}_{m\alpha}\right)\;}
+$$
+
+This is the realizable control law. The estimate $\hat{C}_{m\alpha}(t)$ must be updated online — the update law is derived next.
+
+### Stage 3 — Adaptation law via extended Lyapunov function
+
+Define the parameter estimation error:
+
+$$
+\tilde{\theta} = \hat{C}_{m\alpha} - C_{m\alpha}, \qquad \dot{\tilde\theta} = \dot{\hat{C}}_{m\alpha} \quad (\text{since } C_{m\alpha} \text{ is constant}).
+$$
+
+Extend the Lyapunov function with a quadratic penalty on the estimation error:
+
+$$
+V = \tfrac{1}{2} k_\vartheta\cdot e_\vartheta^2 + \tfrac{1}{2}\cdot \dot\vartheta^2 + \tfrac{1}{2\gamma}\cdot \tilde\theta^2, \qquad \gamma > 0.
+$$
+
+Substituting the realizable law into the rotational dynamics yields the closed-loop angular acceleration:
+
+$$
+\ddot\vartheta = -k_\vartheta\cdot e_\vartheta - k_\omega\cdot \dot\vartheta - \frac{Y(\alpha)}{J}\cdot \tilde\theta.
+$$
+
+Differentiating $V$ along the closed-loop trajectories:
+
+$$
+\dot{V} = -k_\omega\cdot \dot\vartheta^2 + \tilde\theta \left(\frac{\dot{\hat{C}}_{m\alpha}}{\gamma} - \frac{Y(\alpha)\cdot \dot\vartheta}{J}\right).
+$$
+
+To eliminate the indefinite term and ensure $\dot V \leq 0$, choose the **adaptation law**:
+
+$$
+\boxed{\dot{\hat{C}}_{m\alpha} = \gamma \cdot \frac{Y(\alpha) \cdot \dot\vartheta}{J}\;}
+$$
+
+With this choice:
+
+$$
+\dot V = -k_\omega\cdot \dot\vartheta^2 \leq 0.
+$$
+
+### Stability guarantees
+
+From $\dot V \leq 0$ it follows that $V$ is bounded, hence $e_\vartheta$, $\dot\vartheta$, and $\tilde\theta$ all remain **bounded**. By Barbalat's lemma, $\dot\vartheta \to 0$ and consequently $e_\vartheta \to 0$ as $t \to \infty$ — the rocket stabilizes at the target attitude.
+
+The estimation error $\tilde\theta$ remains bounded but does **not** in general converge to zero. Convergence $\hat{C}_{m\alpha} \to C_{m\alpha}$ requires the regressor $Y(\alpha)$ to be **persistently exciting** — a standard condition in adaptive control theory.
+
+### Projection (practical safeguard)
+
+To prevent the estimate from drifting outside physically meaningful bounds, the adaptation is augmented with a projection operator:
+
+$$
+\dot{\hat{C}}_{m\alpha} =
+\begin{cases}
+\gamma \cdot \dfrac{Y(\alpha)\cdot \dot\vartheta}{J}, & \text{if } \hat{C}_{m\alpha} \in [\theta_{min},\ \theta_{max}], \\
+0, & \text{otherwise (when adaptation would push beyond bounds)}.
+\end{cases}
+$$
+
+Bounds are chosen to bracket the reference value: e.g. $[\theta_{min},\ \theta_{max}] = [0.1,\ 5.0]$ rad$^{-1}$ for a positive pitching moment coefficient.
 
 ## 4. Method Description
 ### Control pipeline
