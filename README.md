@@ -369,14 +369,13 @@ python -m src.main --config configs/default.yaml --output-root .
 
 ## 7. Results Summary
 
-| Metric | Baseline (P1) | Adaptive |
+| Metric | Lyapunov-based | Adaptive |
 |--------|--------------|-------------|
 | Final $\vartheta$ | 26.5 deg | 29.9 deg |
-| Steady-state error | **3.46 deg** | 0.08 deg |
+| Final error | **3.46 deg** | 0.08 deg |
 | Final $\dot\vartheta$ | −0.24 deg/s | ≈ 0 deg/s |
 | Settling time | 1.14 s | 1.14 s |
 | $\hat C_{m\alpha}$ final | 0 (fixed) | 1.031 rad⁻¹ (true: 1.054, error: −2.2%) |
-| Max $|\delta|$ | 15 deg (saturated) | 15 deg (saturated during transient) |
 
 **Key finding:** The baseline fails to reach the target angle — the uncompensated aerodynamic pitching moment $Y(\alpha) \cdot C_{m\alpha}$ acts as a persistent disturbance causing 3.46 deg steady-state error. The adaptive controller converges to within 0.08 deg of the target while simultaneously estimating $C_{m\alpha}$ to within 2.2% of the true value.
 
@@ -469,7 +468,7 @@ $\hat C_{m\alpha}(t)$ (yellow) converging toward the true value (red dashed). Ac
 
 ![Comparison](figures/comparison.png)
 
-| Metric | Baseline (P1) | Adaptive |
+| Metric | Lyapunov-baseline | Adaptive |
 |--------|--------------|-------------|
 | Final $\vartheta$ | 26.5 deg | 29.9 deg |
 | Final $\dot\vartheta$ | −0.24 deg/s | ≈ 0 deg/s |

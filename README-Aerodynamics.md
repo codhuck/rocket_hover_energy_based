@@ -7,11 +7,11 @@ This section describes the aerodynamic model used in the project.
 All aerodynamic forces and moments are expressed in the **body-fixed coordinate frame**, attached to the rocket and moving with it. The frame is defined as follows:
 
 - **Origin** — at the center of mass of the rocket.
-- **`X_b` axis** — along the longitudinal axis of the rocket, pointing from the tail toward the nose.
-- **`Y_b` axis** — orthogonal to `X_b`, lying in the plane of symmetry of the rocket.
-- **`Z_b` axis** — perpendicular to the plane of motion, completing the right-handed triad.
+- **$X_{BF}$ axis** — along the longitudinal axis of the rocket, pointing from the tail toward the nose.
+- **$Y_{BF}$ axis** — orthogonal to $X_{B}$, lying in the plane of symmetry of the rocket.
+- **$Z_{BF}$ axis** — perpendicular to the plane of motion, completing the right-handed triad.
 
-The pitch angle $\vartheta$ is measured from the vertical (inertial) axis to the rocket's `X_b` axis, with **positive values corresponding to a rightward tilt**.
+For 2D case the pitch angle $\vartheta$ is measured from the vertical (inertial) axis to the rocket's $X_{B}$ axis, with **positive values corresponding to a rightward tilt**.
 
 ![Body-fixed coordinate frame](figures/BF_Sys.png)
 
@@ -144,13 +144,6 @@ $$
 
 The aerodynamic forces $(X_b, Y_b)$ computed in the body frame are substituted into the inertial-frame equations of motion using the rotation above. The pitching moment $M_b^z$ acts about the $Z_b$ axis and enters the rotational dynamics directly without requiring a frame rotation.
 
----
 
-## Reference Values
-
-| Symbol | Meaning | Value |
-|--------|---------|-------|
-| $S_m$ | Reference cross-sectional area | *(TBD — to be specified once finalised)* |
-| $l$ | Reference length (total rocket length) | *(TBD — to be specified once finalised)* |
 
 All aerodynamic forces and the regressor $Y(\alpha) = q_\infty S_m l\,\alpha$ scale proportionally with the product $S_m \cdot l$. This value must be **consistent across the simulator, the controller, and all formula evaluations**.

@@ -34,7 +34,7 @@ rocket:
   C_m_alpha_true: 1.054
 
 controller:
-  type: adaptive_ce
+  type: lyapunov
   k_theta: 18.0
   k_omega: 7.0
   gamma: 450.0
