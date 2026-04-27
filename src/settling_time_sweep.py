@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import argparse
-from copy import deepcopy
 import csv
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -14,8 +14,21 @@ import yaml
 from .simulation import simulate
 
 
-K_PHI_VALUES = np.arange(6.0, 26.0, 2.0)
-K_OMEGA_VALUES = np.arange(2.0, 8.0, 1.0)
+# Default sweep grid: attitude gain k_theta and adaptation gain gamma.
+K_THETA_VALUES = np.arange(6.0, 26.0, 2.0)
+GAMMA_VALUES = np.array([0.5, 1.0, 2.0, 5.0, 10.0, 20.0])
+
+# All metrics written to CSV. The first one is used as the default
+# z-axis for the 3D surface plot.
+METRIC_KEYS = [
+    "settling_time_theta_error_band_s",
+    "final_c_hat_error",
+    "max_abs_theta_deg",
+    "max_abs_delta_deg",
+    "final_theta_deg",
+    "final_omega_deg_s",
+    "max_speed",
+]
 
 
 def load_config(config_path: Path) -> dict[str, Any]:
@@ -23,39 +36,37 @@ def load_config(config_path: Path) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
-def run_case(base_cfg: dict[str, Any], k_phi: float, k_omega: float) -> dict[str, float | None]:
+def run_case(base_cfg: dict[str, Any], k_theta: float, gamma: float) -> dict[str, float | None]:
     cfg = deepcopy(base_cfg)
-    cfg["controller"]["k_phi"] = float(k_phi)
-    cfg["controller"]["k_omega"] = float(k_omega)
+    cfg["controller"]["k_theta"] = float(k_theta)
+    cfg["controller"]["gamma"] = float(gamma)
 
     result = simulate(cfg)
-    return {
-        "k_phi": float(k_phi),
-        "k_omega": float(k_omega),
-        "phi_error_band_rad": float(result.summary["phi_error_band_rad"]),
-        "settling_time_phi_error_band_s": result.summary["settling_time_phi_error_band_s"],
+
+    row: dict[str, float | None] = {
+        "k_theta": float(k_theta),
+        "gamma": float(gamma),
     }
+    for metric in METRIC_KEYS:
+        value = result.summary.get(metric)
+        row[metric] = None if value is None else float(value)
+    return row
 
 
 def generate_sweep_rows(
     base_cfg: dict[str, Any],
-    k_phi_values: np.ndarray = K_PHI_VALUES,
-    k_omega_values: np.ndarray = K_OMEGA_VALUES,
+    k_theta_values: np.ndarray = K_THETA_VALUES,
+    gamma_values: np.ndarray = GAMMA_VALUES,
 ) -> list[dict[str, float | None]]:
     rows: list[dict[str, float | None]] = []
-    for k_omega in k_omega_values:
-        for k_phi in k_phi_values:
-            rows.append(run_case(base_cfg, float(k_phi), float(k_omega)))
+    for gamma in gamma_values:
+        for k_theta in k_theta_values:
+            rows.append(run_case(base_cfg, float(k_theta), float(gamma)))
     return rows
 
 
 def save_rows_csv(rows: list[dict[str, float | None]], output_path: Path) -> None:
-    fieldnames = [
-        "k_phi",
-        "k_omega",
-        "phi_error_band_rad",
-        "settling_time_phi_error_band_s",
-    ]
+    fieldnames = ["k_theta", "gamma", *METRIC_KEYS]
     with output_path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -69,65 +80,86 @@ def save_rows_json(rows: list[dict[str, float | None]], output_path: Path) -> No
 
 def build_surface_arrays(
     rows: list[dict[str, float | None]],
+    metric: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    k_phi_values = np.array(sorted({float(row["k_phi"]) for row in rows}), dtype=float)
-    k_omega_values = np.array(sorted({float(row["k_omega"]) for row in rows}), dtype=float)
-    x_grid, y_grid = np.meshgrid(k_phi_values, k_omega_values)
+    k_theta_values = np.array(sorted({float(row["k_theta"]) for row in rows}), dtype=float)
+    gamma_values = np.array(sorted({float(row["gamma"]) for row in rows}), dtype=float)
+    x_grid, y_grid = np.meshgrid(k_theta_values, gamma_values)
     z_grid = np.full_like(x_grid, np.nan, dtype=float)
 
-    omega_index = {value: idx for idx, value in enumerate(k_omega_values)}
-    phi_index = {value: idx for idx, value in enumerate(k_phi_values)}
+    gamma_index = {value: idx for idx, value in enumerate(gamma_values)}
+    theta_index = {value: idx for idx, value in enumerate(k_theta_values)}
 
     for row in rows:
-        i = omega_index[float(row["k_omega"])]
-        j = phi_index[float(row["k_phi"])]
-        settling_time = row["settling_time_phi_error_band_s"]
-        z_grid[i, j] = np.nan if settling_time is None else float(settling_time)
+        i = gamma_index[float(row["gamma"])]
+        j = theta_index[float(row["k_theta"])]
+        value = row.get(metric)
+        z_grid[i, j] = np.nan if value is None else float(value)
 
     return x_grid, y_grid, z_grid
 
 
-def save_surface_plot(rows: list[dict[str, float | None]], output_path: Path) -> None:
-    x_grid, y_grid, z_grid = build_surface_arrays(rows)
+def save_surface_plot(
+    rows: list[dict[str, float | None]],
+    output_path: Path,
+    metric: str,
+) -> None:
+    x_grid, y_grid, z_grid = build_surface_arrays(rows, metric)
 
     fig = plt.figure(figsize=(9, 6.8))
     ax = fig.add_subplot(111, projection="3d")
-    surface = ax.plot_surface(x_grid, y_grid, z_grid, cmap="viridis", edgecolor="none", antialiased=True)
-    ax.set_xlabel("k_phi")
-    ax.set_ylabel("k_omega")
-    ax.set_zlabel("Settling time [s]")
-    ax.set_title("Settling Time Surface over k_phi and k_omega")
+    surface = ax.plot_surface(
+        x_grid, y_grid, z_grid, cmap="viridis", edgecolor="none", antialiased=True
+    )
+    ax.set_xlabel("k_theta")
+    ax.set_ylabel("gamma")
+    ax.set_zlabel(metric)
+    ax.set_title(f"{metric} surface over (k_theta, gamma)")
     ax.view_init(elev=28, azim=-132)
-    fig.colorbar(surface, ax=ax, shrink=0.7, pad=0.1, label="Settling time [s]")
+    fig.colorbar(surface, ax=ax, shrink=0.7, pad=0.1, label=metric)
     fig.tight_layout()
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
 
 
-def save_sweep_outputs(rows: list[dict[str, float | None]], output_dir: Path) -> None:
+def save_sweep_outputs(
+    rows: list[dict[str, float | None]],
+    output_dir: Path,
+    metric: str,
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    save_rows_csv(rows, output_dir / "settling_time_grid.csv")
-    save_rows_json(rows, output_dir / "settling_time_grid.json")
-    save_surface_plot(rows, output_dir / "settling_time_surface.png")
+    save_rows_csv(rows, output_dir / "sweep_grid.csv")
+    save_rows_json(rows, output_dir / "sweep_grid.json")
+    save_surface_plot(rows, output_dir / f"surface_{metric}.png", metric)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run a regular-grid settling time sweep over k_phi and k_omega.")
+    parser = argparse.ArgumentParser(
+        description="Run a regular-grid sweep over k_theta and gamma for adaptive control."
+    )
     parser.add_argument("--config", type=Path, default=Path("configs/default.yaml"))
-    parser.add_argument("--output-root", type=Path, default=Path("outputs/settling_time_sweep"))
+    parser.add_argument("--output-root", type=Path, default=Path("outputs/sweep"))
+    parser.add_argument(
+        "--metric",
+        type=str,
+        default=METRIC_KEYS[0],
+        choices=METRIC_KEYS,
+        help="Metric used for the 3D surface plot (all metrics still go to CSV).",
+    )
     args = parser.parse_args()
 
     base_cfg = load_config(args.config)
     rows = generate_sweep_rows(base_cfg)
-    save_sweep_outputs(rows, args.output_root)
+    save_sweep_outputs(rows, args.output_root, args.metric)
 
     print(json.dumps(
         {
             "cases": len(rows),
             "output_root": str(args.output_root),
-            "csv": str(args.output_root / "settling_time_grid.csv"),
-            "json": str(args.output_root / "settling_time_grid.json"),
-            "plot": str(args.output_root / "settling_time_surface.png"),
+            "metric": args.metric,
+            "csv": str(args.output_root / "sweep_grid.csv"),
+            "json": str(args.output_root / "sweep_grid.json"),
+            "plot": str(args.output_root / f"surface_{args.metric}.png"),
         },
         indent=2,
     ))
