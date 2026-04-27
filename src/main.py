@@ -3,58 +3,111 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+
 import yaml
 
-from .simulation import simulate
-from .visualization import save_all_figures, save_animation, save_preview_figure, plot_comparison
+from .simulation import simulate, simulate_comparison, comparison_diff
+from .visualization import (
+    save_all_figures,
+    save_animation,
+    save_preview_figure,
+    plot_comparison,
+)
 
-try:
-    from .simulation import simulate_both
-except ImportError:
-    simulate_both = None
+
+def _load_config(config_path: Path) -> dict:
+    with config_path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def _run_single(cfg: dict, output_root: Path) -> None:
+    figures_dir = output_root / "figures"
+    animations_dir = output_root / "animations"
+    summary_path = figures_dir / "summary.json"
+
+    result = simulate(cfg)
+    save_all_figures(result, figures_dir)
+    save_preview_figure(result, figures_dir / "rocket_visualization_preview.png")
+    save_animation(result, animations_dir / "rocket_attitude_realtime.mp4")
+
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(result.summary, indent=2), encoding="utf-8")
+    print(json.dumps(result.summary, indent=2))
+
+
+def _run_comparison(cfg: dict, output_root: Path) -> None:
+    figures_dir = output_root / "figures"
+    animations_dir = output_root / "animations"
+    summary_path = figures_dir / "summary.json"
+
+    result_baseline, result_adaptive = simulate_comparison(cfg)
+
+    # Per-controller subdirectories with full per-run figures.
+    save_all_figures(result_baseline, figures_dir / "baseline")
+    save_all_figures(result_adaptive, figures_dir / "adaptive")
+    save_preview_figure(
+        result_adaptive,
+        figures_dir / "rocket_visualization_preview.png",
+    )
+
+    # Side-by-side comparison plot.
+    plot_comparison(
+        result_baseline,
+        result_adaptive,
+        figures_dir,
+        label_baseline="Project 1 (Lyapunov)",
+        label_adaptive="Project 2 (Adaptive CE)",
+    )
+
+    # Animation of the adaptive run (the more interesting one to watch).
+    save_animation(
+        result_adaptive,
+        animations_dir / "rocket_attitude_adaptive.mp4",
+    )
+
+    summary_payload = {
+        "baseline": result_baseline.summary,
+        "adaptive": result_adaptive.summary,
+        "diff": comparison_diff(result_baseline, result_adaptive),
+    }
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(
+        json.dumps(summary_payload, indent=2),
+        encoding="utf-8",
+    )
+    print(json.dumps(summary_payload, indent=2))
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description='Run planar TVC rocket simulation.')
-    parser.add_argument('--config', type=Path, default=Path('configs/default.yaml'))
-    parser.add_argument('--output-root', type=Path, default=Path('.'))
+    parser = argparse.ArgumentParser(
+        description="Run planar TVC rocket simulation (single controller or comparison)."
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("configs/default.yaml"),
+    )
+    parser.add_argument(
+        "--output-root",
+        type=Path,
+        default=Path("."),
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["single", "comparison"],
+        default="single",
+        help="single: run one controller (cfg['controller']). "
+             "comparison: run baseline and adaptive in cfg['comparison'].",
+    )
     args = parser.parse_args()
 
-    with args.config.open('r', encoding='utf-8') as f:
-        cfg = yaml.safe_load(f)
+    cfg = _load_config(args.config)
 
-    figures_dir = args.output_root / 'figures'
-    animations_dir = args.output_root / 'animations'
-
-    summary_path = figures_dir / 'summary.json'
-    if simulate_both is not None:
-        result_pd, result_cross = simulate_both(cfg)
-        save_all_figures(result_pd, figures_dir)
-        save_preview_figure(result_pd, figures_dir / 'rocket_visualization_preview.png')
-        plot_comparison(result_pd, result_cross, figures_dir)
-        summary_payload = {
-            'pd': result_pd.summary,
-            'cross_term': result_cross.summary,
-            'comparison': {
-                'final_phi_deg_diff': float(result_cross.summary['final_phi_deg'] - result_pd.summary['final_phi_deg']),
-                'final_omega_deg_s_diff': float(result_cross.summary['final_omega_deg_s'] - result_pd.summary['final_omega_deg_s']),
-                'max_abs_phi_deg_diff': float(result_cross.summary['max_abs_phi_deg'] - result_pd.summary['max_abs_phi_deg']),
-                'max_abs_delta_deg_diff': float(result_cross.summary['max_abs_delta_deg'] - result_pd.summary['max_abs_delta_deg']),
-                'max_speed_diff': float(result_cross.summary['max_speed'] - result_pd.summary['max_speed']),
-            },
-        }
+    if args.mode == "single":
+        _run_single(cfg, args.output_root)
     else:
-        result_pd = simulate(cfg)
-        save_all_figures(result_pd, figures_dir)
-        save_preview_figure(result_pd, figures_dir / 'rocket_visualization_preview.png')
-        summary_payload = result_pd.summary
-
-    summary_path.write_text(json.dumps(summary_payload, indent=2), encoding='utf-8')
-
-    save_animation(result_pd, animations_dir / 'rocket_attitude_realtime.mp4')
-
-    print(json.dumps(result_pd.summary, indent=2))
+        _run_comparison(cfg, args.output_root)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
