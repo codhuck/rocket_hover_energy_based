@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Any
 import math
+from dataclasses import dataclass
+from typing import Any, Dict
+
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from .controller import AttitudeLyapunovController
-from .system import RocketParams, rocket_rhs
+from .controller import AttitudeLyapunovController, AdaptiveCEController
+from .system import (
+    IDX_X, IDX_Y, IDX_THETA, IDX_VX, IDX_VY, IDX_THETA_DOT, IDX_C_HAT,
+    STATE_DIM,
+    RocketParams, rocket_rhs,
+)
 
 
 @dataclass
@@ -21,19 +26,38 @@ class SimulationResult:
     config: Dict[str, Any]
 
 
+def build_controller(cfg: Dict):
+    """Factory: pick controller type from config['controller']['type']."""
+    ctrl_cfg = cfg['controller']
+    ctrl_type = ctrl_cfg.get('type', 'adaptive_ce')
+
+    if ctrl_type == 'lyapunov':
+        return AttitudeLyapunovController.from_config(cfg)
+    elif ctrl_type == 'adaptive_ce':
+        return AdaptiveCEController.from_config(cfg)
+    else:
+        raise ValueError(f"Unknown controller type: {ctrl_type}")
+
+
 def build_initial_state(cfg: Dict) -> np.ndarray:
+    """Builds the augmented initial state (7-dim).
+
+    Physical states come from cfg['initial_state'].
+    The initial parameter estimate c_hat(0) comes from
+    cfg['controller']['c_hat_initial'] (or 0.0 for non-adaptive controllers).
+    """
     init = cfg['initial_state']
-    return np.array(
-        [
-            float(init['x']),
-            float(init['y']),
-            math.radians(float(init['phi_deg'])),
-            float(init['vx']),
-            float(init['vy']),
-            math.radians(float(init['omega_deg_s'])),
-        ],
-        dtype=float,
-    )
+    ctrl_cfg = cfg.get('controller', {})
+
+    state = np.zeros(STATE_DIM)
+    state[IDX_X] = float(init['x'])
+    state[IDX_Y] = float(init['y'])
+    state[IDX_THETA] = math.radians(float(init['theta_deg']))
+    state[IDX_VX] = float(init['vx'])
+    state[IDX_VY] = float(init['vy'])
+    state[IDX_THETA_DOT] = math.radians(float(init['omega_deg_s']))
+    state[IDX_C_HAT] = float(ctrl_cfg.get('c_hat_initial', 0.0))
+    return state
 
 
 def compute_settling_time(
@@ -50,11 +74,11 @@ def compute_settling_time(
 def simulate(cfg: Dict) -> SimulationResult:
     state0 = build_initial_state(cfg)
     params = RocketParams.from_config(cfg)
-    controller = AttitudeLyapunovController.from_config(cfg)
+    controller = build_controller(cfg)
+
     exp = cfg['experiment']
     analysis_cfg = cfg.get('analysis', {})
-    phi_error_band_rad = float(analysis_cfg.get('phi_error_band_rad', 0.1))
-
+    theta_error_band_rad = float(analysis_cfg.get('theta_error_band_rad', 0.1))
     t_eval = np.linspace(0.0, float(exp['t_final']), int(exp['sample_count']))
 
     sol = solve_ivp(
@@ -71,54 +95,62 @@ def simulate(cfg: Dict) -> SimulationResult:
 
     state = sol.y.T
     n = state.shape[0]
-    alpha = np.zeros(n)
+
+    #Recompute control trajectories from the integrated state
+    throttle = np.zeros(n)
     delta = np.zeros(n)
-    e_phi = np.zeros(n)
+    c_hat_dot = np.zeros(n)
+    e_theta = np.zeros(n)
     speed = np.zeros(n)
     vertical_accel = np.zeros(n)
     horiz_accel = np.zeros(n)
 
     for i in range(n):
-        a, d, cache = controller.compute_control(state[i], params)
-        alpha[i] = a
+        thr, d, c_dot, cache = controller.compute_control(state[i], params)
+        throttle[i] = thr
         delta[i] = d
-        e_phi[i] = cache['e_phi']
-        speed[i] = math.hypot(state[i, 3], state[i, 4])
-        thrust = a * params.F_max
-        horiz_accel[i] = (thrust / params.mass) * math.sin(state[i, 2] + d)
-        vertical_accel[i] = (thrust / params.mass) * math.cos(state[i, 2] + d) - params.g
+        c_hat_dot[i] = c_dot
+        e_theta[i] = cache['e_theta']
+
+        vx, vy = state[i, IDX_VX], state[i, IDX_VY]
+        theta_i = state[i, IDX_THETA]
+        speed[i] = math.hypot(vx, vy)
+        thrust_i = thr * params.F_max
+        horiz_accel[i] = (thrust_i / params.mass) * math.sin(theta_i + d)
+        vertical_accel[i] = (thrust_i / params.mass) * math.cos(theta_i + d) - params.g
 
     t = sol.t
-    settling_time_phi_error_band_s = compute_settling_time(t, np.abs(e_phi), phi_error_band_rad)
+    settling_time = compute_settling_time(t, np.abs(e_theta), theta_error_band_rad)
+
     summary = {
-        'final_x': float(state[-1, 0]),
-        'final_y': float(state[-1, 1]),
-        'final_phi_deg': float(np.degrees(state[-1, 2])),
-        'final_omega_deg_s': float(np.degrees(state[-1, 5])),
-        'final_speed': float(speed[-1]),
-        'max_abs_phi_deg': float(np.max(np.abs(np.degrees(state[:, 2])))),
+        'final_theta_deg': float(np.degrees(state[-1, IDX_THETA])),
+        'final_theta_dot_deg_s': float(np.degrees(state[-1, IDX_THETA_DOT])),
+        'final_c_hat': float(state[-1, IDX_C_HAT]),
+        'c_hat_true': float(params.C_m_alpha_true),
+        'c_hat_error': float(state[-1, IDX_C_HAT] - params.C_m_alpha_true),
+        'max_abs_theta_deg': float(np.max(np.abs(np.degrees(state[:, IDX_THETA])))),
         'max_abs_delta_deg': float(np.max(np.abs(np.degrees(delta)))),
         'max_speed': float(np.max(speed)),
-        'hover_alpha': float(params.alpha_hover),
-        'params_l_cp': float(params.l_cp),
-        'params_J_const': float(params.J_const),
-        'F_max': float(params.F_max),
-        'mass': float(params.mass),
-        'phi_error_band_rad': phi_error_band_rad,
-        'settling_time_phi_error_band_s': settling_time_phi_error_band_s,
+        'theta_error_band_rad': theta_error_band_rad,
+        'settling_time_theta_error_band_s': settling_time,
         'simulation_time': float(t[-1]),
     }
+
     derived = {
         'speed': speed,
         'horiz_accel': horiz_accel,
         'vertical_accel': vertical_accel,
+        'c_hat': state[:, IDX_C_HAT].copy(),
+        'c_hat_dot': c_hat_dot,
     }
+
     controls = {
-        'alpha': alpha,
+        'throttle': throttle,
         'delta': delta,
-        'e_phi': e_phi,
-        'phi_target': np.zeros_like(t) + controller.phi_target,
+        'e_theta': e_theta,
+        'theta_target': np.zeros_like(t) + getattr(controller, 'theta_target', 0.0),
     }
+
     return SimulationResult(
         t=t,
         state=state,
