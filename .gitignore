@@ -34,3 +34,11 @@ htmlcov/
 # IDEs
 .vscode/
 .idea/
+
+# Simulation outputs
+figures/*.png
+figures/*.json
+figures/baseline/
+figures/adaptive/
+animations/*.gif
+animations/*.mp4

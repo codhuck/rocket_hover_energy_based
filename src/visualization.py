@@ -5,6 +5,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.animation as animation
 import shutil
 import subprocess
 import tempfile
@@ -48,7 +49,7 @@ PALETTE = {
 def rot2d(theta: float) -> np.ndarray:
     c = math.cos(theta)
     s = math.sin(theta)
-    return np.array([[c, -s], [s, c]])
+    return np.array([[c, s], [-s, c]])
 
 
 def body_to_world(points: np.ndarray, x: float, y: float, theta: float) -> np.ndarray:
@@ -149,7 +150,7 @@ def draw_rocket(ax, x: float, y: float, theta: float, delta: float, throttle: fl
         ax.add_patch(mpatches.Polygon(flame_world, closed=True, facecolor=color, edgecolor='none', alpha=0.85, zorder=3))
 
     arc_r = 0.42
-    arc_theta = np.linspace(theta + math.pi, thrust_angle + math.pi, 25)
+    arc_theta = np.linspace(math.pi - theta, math.pi - thrust_angle, 25)
     ax.plot(
         nozzle_center[0] + arc_r * np.sin(arc_theta),
         nozzle_center[1] - arc_r * np.cos(arc_theta),
@@ -264,6 +265,25 @@ def save_all_figures(result: SimulationResult, output_dir: Path) -> None:
     ax.legend(fontsize=8)
     fig.tight_layout()
     fig.savefig(output_dir / 'planar_trajectory.png', dpi=190, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+    # ============================================================
+    # Lyapunov function V(t)
+    # ============================================================
+    k_theta = result.config.get('controller', {}).get('k_theta', 18.0)
+    e_theta_arr = controls['e_theta']
+    omega_arr = state[:, 5]
+    V_arr = 0.5 * k_theta * e_theta_arr ** 2 + 0.5 * omega_arr ** 2
+
+    fig, ax = plt.subplots(figsize=(8.5, 4.5), facecolor=PALETTE['bg'])
+    _decorate_timeseries_axes(ax)
+    ax.plot(t, V_arr, color=PALETTE['theta'], lw=1.8, label='$V(t) = \\frac{1}{2}k_\\theta e_\\theta^2 + \\frac{1}{2}\\dot\\theta^2$')
+    ax.set_title('Lyapunov function — must be monotonically non-increasing', color=PALETTE['title'], fontsize=10)
+    ax.set_xlabel('Time [s]', color=PALETTE['label'])
+    ax.set_ylabel('V(t)', color=PALETTE['label'])
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(output_dir / 'lyapunov_function.png', dpi=190, facecolor=fig.get_facecolor())
     plt.close(fig)
 
     # ============================================================
@@ -395,6 +415,7 @@ def _info_block(t_value: float, state_row: np.ndarray, delta: float, throttle: f
 
 
 def save_animation(result: SimulationResult, output_path: Path) -> None:
+    output_path = output_path.with_suffix('.gif')
     output_path.parent.mkdir(parents=True, exist_ok=True)
     t = result.t
     state = result.state
@@ -403,14 +424,17 @@ def save_animation(result: SimulationResult, output_path: Path) -> None:
     c_hat_true = float(result.params.C_m_alpha_true)
 
     sample_dt = float(np.mean(np.diff(t))) if len(t) > 1 else 0.05
-    target_fps = 20
+    target_fps = 10
     stride = max(1, int(round(1.0 / (target_fps * sample_dt))))
-    fps = target_fps
+    frame_indices = list(range(0, len(t), stride))
+    if frame_indices[-1] != len(t) - 1:
+        frame_indices.append(len(t) - 1)
 
     fig = plt.figure(figsize=(7.2, 8.0), facecolor=PALETTE['bg'])
     ax = fig.add_subplot(111)
 
-    def render_frame(idx: int, save_path: Path) -> None:
+    def update(frame_num: int) -> None:
+        idx = frame_indices[frame_num]
         draw_rocket(
             ax,
             x=float(state[idx, 0]),
@@ -438,29 +462,12 @@ def save_animation(result: SimulationResult, output_path: Path) -> None:
         )
         fig.suptitle('Planar TVC Rocket — Adaptive Attitude Stabilization',
                      color=PALETTE['text'], fontsize=11)
-        fig.savefig(save_path, dpi=80, facecolor=fig.get_facecolor())
 
     try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmpdir_path = Path(tmpdir)
-            frame_idx = 0
-            for idx in range(0, len(t), stride):
-                render_frame(idx, tmpdir_path / f"frame_{frame_idx:05d}.png")
-                frame_idx += 1
-
-            if (len(t) - 1) % stride != 0:
-                render_frame(len(t) - 1, tmpdir_path / f"frame_{frame_idx:05d}.png")
-
-            ffmpeg_exe = shutil.which('ffmpeg')
-            if ffmpeg_exe is None:
-                import imageio_ffmpeg
-                ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-
-            cmd = [
-                ffmpeg_exe, '-y', '-loglevel', 'error', '-framerate', str(fps),
-                '-i', str(tmpdir_path / 'frame_%05d.png'),
-                '-pix_fmt', 'yuv420p', '-vcodec', 'libx264', str(output_path),
-            ]
-            subprocess.run(cmd, check=True)
+        anim = animation.FuncAnimation(
+            fig, update, frames=len(frame_indices), interval=1000 // target_fps
+        )
+        writer = animation.PillowWriter(fps=target_fps)
+        anim.save(str(output_path), writer=writer, dpi=80)
     finally:
         plt.close(fig)

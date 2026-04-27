@@ -28,7 +28,7 @@ def _run_single(cfg: dict, output_root: Path) -> None:
     result = simulate(cfg)
     save_all_figures(result, figures_dir)
     save_preview_figure(result, figures_dir / "rocket_visualization_preview.png")
-    save_animation(result, animations_dir / "rocket_attitude_realtime.mp4")
+    save_animation(result, animations_dir / "rocket_attitude_realtime.gif")
 
     figures_dir.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(result.summary, indent=2), encoding="utf-8")
@@ -62,7 +62,7 @@ def _run_comparison(cfg: dict, output_root: Path) -> None:
     # Animation of the adaptive run (the more interesting one to watch).
     save_animation(
         result_adaptive,
-        animations_dir / "rocket_attitude_adaptive.mp4",
+        animations_dir / "rocket_attitude_adaptive.gif",
     )
 
     summary_payload = {

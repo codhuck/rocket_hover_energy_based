@@ -1,6 +1,6 @@
 project:
-  name: project_1_lyapunov_control_planar_tvc_rocket
-  description: Planar TVC rocket attitude stabilization with a Lyapunov-based inner loop
+  name: project_2_adaptive_control_planar_tvc_rocket
+  description: Planar TVC rocket attitude stabilization with CE adaptive Lyapunov control
 
 experiment:
   t_final: 20.0
@@ -9,26 +9,53 @@ experiment:
   rng_seed: 0
 
 analysis:
-  phi_error_band_rad: 0.1
+  theta_error_band_rad: 0.1
 
 initial_state:
   x: 0.0
   y: 8.0
-  phi_deg: 90.0
+  theta_deg: -20.0
   vx: 0.0
   vy: 0.0
   omega_deg_s: 0
 
 rocket:
   g: 9.81
+  rho: 1.225
   mass: 13000
-  F_max: 1.5*9.81*13000
+  F_max: 191763.0
   J_const: 318196.0
   l_cp: 10.3
   l: 18.0
+  S_mid: 3.14
   delta_max_deg: 15.0
+  C_x: 0.358
+  C_yn: 0.05403
+  C_m_alpha_true: 1.054
 
 controller:
-  k_phi: 18.0
+  type: adaptive_ce
+  k_theta: 18.0
   k_omega: 7.0
-  phi_target_deg: 41.0
+  gamma: 450.0
+  theta_target_deg: 30.0
+  c_hat_initial: 0.0
+  c_hat_min: 0.1
+  c_hat_max: 5.0
+
+comparison:
+  baseline:
+    type: lyapunov
+    k_theta: 18.0
+    k_omega: 7.0
+    theta_target_deg: 30.0
+    c_hat_initial: 0.0
+  adaptive:
+    type: adaptive_ce
+    k_theta: 18.0
+    k_omega: 7.0
+    gamma: 450.0
+    theta_target_deg: 30.0
+    c_hat_initial: 0.0
+    c_hat_min: 0.1
+    c_hat_max: 5.0

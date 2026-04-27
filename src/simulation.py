@@ -88,8 +88,8 @@ def simulate(cfg: Dict) -> SimulationResult:
         y0=state0,
         t_eval=t_eval,
         max_step=float(exp["max_step"]),
-        rtol=1e-7,
-        atol=1e-9,
+        rtol=1e-4,
+        atol=1e-6,
     )
     if not sol.success:
         raise RuntimeError(f"Integration failed: {sol.message}")

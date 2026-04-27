@@ -46,7 +46,7 @@ class AttitudeLyapunovController:
         theta = float(state[IDX_THETA])
         theta_dot = float(state[IDX_THETA_DOT])
 
-        throttle = params.throttle_hover
+        throttle = 1.0
         e_theta = wrap_angle(theta - self.theta_target)
 
         authority = max(throttle * params.F_max * params.l_cp, 1e-8)
@@ -106,7 +106,7 @@ class AdaptiveCEController:
         theta_dot = float(state[IDX_THETA_DOT])
         c_hat = float(state[IDX_C_HAT])
 
-        throttle = params.throttle_hover
+        throttle = 1.0
         e_theta = wrap_angle(theta - self.theta_target)
 
         # Aerodynamic regressor Y = q_inf * S_mid * l * alpha
