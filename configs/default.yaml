@@ -21,10 +21,11 @@ initial_state:
 
 rocket:
   g: 9.81
-  mass: 1.60
-  F_max: 24.0
-  J_const: 0.1183
-  l_cp: 0.6091
+  mass: 13000
+  F_max: 1.5*9.81*13000
+  J_const: 318196.0
+  l_cp: 10.3
+  l: 18.0
   delta_max_deg: 15.0
 
 controller:
