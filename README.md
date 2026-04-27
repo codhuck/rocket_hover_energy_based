@@ -1,6 +1,6 @@
 # Project 2 — Planar TVC Rocket with Adaptive Lyapunov Attitude Control
 
-![Adaptive CE controller](animations/rocket_attitude_adaptive.gif)
+![Adaptive controller](animations/rocket_attitude_adaptive.gif)
 
 ## Overview
 
@@ -9,7 +9,7 @@ This repository implements a **planar thrust-vector-controlled (TVC) rocket** wi
 Two controllers are implemented and compared:
 
 - **P1 Baseline** (`AttitudeLyapunovController`): the Project 1 Lyapunov law applied to the aerodynamic system without aerodynamic compensation — demonstrates performance degradation when aerodynamics is ignored.
-- **Adaptive CE controller** (`AdaptiveCEController`): extends the Lyapunov law with online estimation of $C_{m\alpha}$ via an adaptation law derived from an extended Lyapunov function.
+- **Adaptive controller** (`AdaptiveCEController`): extends the Lyapunov law with online estimation of $C_{m\alpha}$ via an adaptation law derived from an extended Lyapunov function.
 
 The control objective is **attitude stabilization only**:
 - pitch: $\vartheta \to \vartheta^*$ (arbitrary constant target angle)
@@ -369,7 +369,7 @@ python -m src.main --config configs/default.yaml --output-root .
 
 ## 7. Results Summary
 
-| Metric | Baseline (P1) | Adaptive CE |
+| Metric | Baseline (P1) | Adaptive |
 |--------|--------------|-------------|
 | Final $\vartheta$ | 26.5 deg | 29.9 deg |
 | Steady-state error | **3.46 deg** | 0.08 deg |
@@ -378,7 +378,7 @@ python -m src.main --config configs/default.yaml --output-root .
 | $\hat C_{m\alpha}$ final | 0 (fixed) | 1.031 rad⁻¹ (true: 1.054, error: −2.2%) |
 | Max $|\delta|$ | 15 deg (saturated) | 15 deg (saturated during transient) |
 
-**Key finding:** The baseline fails to reach the target angle — the uncompensated aerodynamic pitching moment $Y(\alpha) \cdot C_{m\alpha}$ acts as a persistent disturbance causing 3.46 deg steady-state error. The adaptive CE controller converges to within 0.08 deg of the target while simultaneously estimating $C_{m\alpha}$ to within 2.2% of the true value.
+**Key finding:** The baseline fails to reach the target angle — the uncompensated aerodynamic pitching moment $Y(\alpha) \cdot C_{m\alpha}$ acts as a persistent disturbance causing 3.46 deg steady-state error. The adaptive controller converges to within 0.08 deg of the target while simultaneously estimating $C_{m\alpha}$ to within 2.2% of the true value.
 
 ### Limitations
 
@@ -427,11 +427,11 @@ $V(t) = \frac{1}{2}k_\vartheta e_\vartheta^2 + \frac{1}{2}\dot\vartheta^2$
 
 ---
 
-### Adaptive CE controller
+### Adaptive controller
 
 #### Animation
 
-![Adaptive CE animation](animations/rocket_attitude_adaptive.gif)
+![Adaptive animation](animations/rocket_attitude_adaptive.gif)
 
 #### State trajectories
 
@@ -469,7 +469,7 @@ $\hat C_{m\alpha}(t)$ (yellow) converging toward the true value (red dashed). Ac
 
 ![Comparison](figures/comparison.png)
 
-| Metric | Baseline (P1) | Adaptive CE |
+| Metric | Baseline (P1) | Adaptive |
 |--------|--------------|-------------|
 | Final $\vartheta$ | 26.5 deg | 29.9 deg |
 | Final $\dot\vartheta$ | −0.24 deg/s | ≈ 0 deg/s |
