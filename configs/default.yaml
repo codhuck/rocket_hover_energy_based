@@ -9,12 +9,12 @@
 rocket:
   g: 9.81
   rho: 1.225            # standard sea-level air density [kg/m^3]
-  mass: 1.6
-  J_const: 0.1183
-  l_cp: 0.6091          # CoM-to-nozzle distance [m]
-  l: 1.0                # rocket total length [m]
-  S_mid: 0.01           # midship cross-section area [m^2]
-  F_max: 30.0
+  mass: 13000
+  J_const: 318196.65
+  l_cp: 10.5          # CoM-to-nozzle distance [m]
+  l: 18                # rocket total length [m]
+  S_mid: 1.1304           # midship cross-section area [m^2]
+  F_max: 13000*9.81*1.5
   delta_max_deg: 15.0
 
   # Aerodynamic coefficients
