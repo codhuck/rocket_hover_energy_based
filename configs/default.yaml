@@ -3,7 +3,7 @@ project:
   description: Planar TVC rocket attitude stabilization with a Lyapunov-based inner loop
 
 experiment:
-  t_final: 5.0
+  t_final: 20.0
   max_step: 0.02
   sample_count: 721
   rng_seed: 0
@@ -14,10 +14,10 @@ analysis:
 initial_state:
   x: 0.0
   y: 8.0
-  phi_deg: 20.0
+  phi_deg: 90.0
   vx: 0.0
   vy: 0.0
-  omega_deg_s: -8.0
+  omega_deg_s: 0
 
 rocket:
   g: 9.81
@@ -30,4 +30,4 @@ rocket:
 controller:
   k_phi: 18.0
   k_omega: 7.0
-  phi_target_deg: 0.0
+  phi_target_deg: 41.0
