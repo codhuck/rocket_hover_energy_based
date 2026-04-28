@@ -186,19 +186,21 @@ The gimbal torque $-F\cdot l_{cp}\sin\delta$ is negative for positive $\delta$ (
  
 The equilibrium to stabilize is:
  
-$$
-(\vartheta, \dot\vartheta) = (\vartheta^*, 0), \qquad \vartheta^* \in \mathbb{R}\ \text{arbitrary constant}
-$$
+```math
+(\vartheta, \dot\vartheta) = (\vartheta^{*}, 0), \qquad \vartheta^{*} \in \mathbb{R}\ \text{arbitrary constant}
+```
+
+
  
-No restriction is placed on $\vartheta^*$. In practice, large $|\vartheta^*|$ reduces the effective vertical thrust component $F\cos\vartheta^*$, so a margin condition $F\cos\vartheta^* > mg$ should be checked to ensure altitude can be maintained if needed.
+No restriction is placed on $\vartheta^{\ast}$. In practice, large $|\vartheta^{\ast}|$ reduces the effective vertical thrust component $F\cos\vartheta^{\ast}$, so a margin condition $F\cos\vartheta^{\ast} > mg$ should be checked to ensure altitude can be maintained if needed.
  
 Define the attitude error coordinates:
  
-$$
-e_\vartheta = \vartheta - \vartheta^*, \qquad \dot e_\vartheta = \dot\vartheta - \underbrace{\dot\vartheta^*}_{=\,0} = \dot\vartheta
-$$
+```math
+e_\vartheta = \vartheta - \vartheta^{*}, \qquad \dot e_\vartheta = \dot\vartheta - \underbrace{\dot\vartheta^{*}}_{=\,0} = \dot\vartheta
+```
  
-Since $\vartheta^*$ is a **constant**, $\dot\vartheta^* = 0$ exactly — the error derivative equals the angular rate. This means the entire derivation that follows is **independent of the specific value of $\vartheta^*$**: substituting any constant target produces the same equations, control law, adaptation law, and stability proof.
+Since $\vartheta^{\ast}$ is a **constant**, $\dot\vartheta^{\ast} = 0$ exactly — the error derivative equals the angular rate. This means the entire derivation that follows is **independent of the specific value of $\vartheta^{\ast}$**: substituting any constant target produces the same equations, control law, adaptation law, and stability proof.
  
 In error coordinates, the rotational dynamics become:
  
