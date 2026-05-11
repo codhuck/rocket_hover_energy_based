@@ -1,0 +1,18 @@
+{
+  "controller_type": "backstepping",
+  "final_x": -0.09881059938885085,
+  "final_y": 0.30088198561870183,
+  "final_vx": 0.023420785545060656,
+  "final_vy": -0.13192095975014997,
+  "final_phi_deg": -0.0318065392755635,
+  "final_omega_deg_s": 0.007359037336980035,
+  "final_delta_deg": -0.0003183227384023267,
+  "final_speed": 0.13398385282170538,
+  "max_speed": 22.362861617681503,
+  "max_abs_phi_deg": 35.09285903648727,
+  "max_abs_delta_deg": 14.999999999993651,
+  "lyap_V_initial": 40626.67331135562,
+  "lyap_V_final": 0.10097033598063784,
+  "landing_time_s": 24.436695530795582,
+  "simulation_time": 24.43
+}
