@@ -1,0 +1,77 @@
+# =============================================================================
+# Full-system backstepping landing controller — Project 3
+#
+# Usage:
+#   python -m src.main --config configs/backstepping.yaml --output-root outputs/backstepping
+# =============================================================================
+
+rocket:
+  g: 9.81
+  rho: 1.225
+  mass: 13000
+  J_const: 318196.65
+  l_cp: 10.5           # CoM-to-nozzle [m]
+  l: 18.0              # reference length [m]
+  S_mid: 1.1304        # reference cross-section [m²]
+  F_max: 191763.0      # = 13000 * 9.81 * 1.5  [N]
+  delta_max_deg: 15.0
+  delta_max_cmd_deg: 15.0
+  sigma_min: 0.45      # minimum throttle (keeps g2 > 0)
+  tau_delta: 0.05      # nozzle actuator time constant [s]
+
+  # Aerodynamic coefficients (all known)
+  C_x: 0.358
+  C_yn: 3.096           # normal-force slope [1/rad]  (0.05403 deg⁻¹ × 57.3)
+  C_m_alpha_true: 1.054 # pitching-moment coefficient [1/rad]
+
+initial_state:
+  x: 50.0       # start 50 m to the right of landing pad
+  y: 200.0      # start at 200 m altitude
+  theta_deg: 30.0
+  vx: 10.0     # approaching the pad
+  vy: -20.0     # descending
+  omega_deg_s: 0.0
+  delta_deg: 0.0
+
+experiment:
+  t_final: 30.0
+  sample_count: 3001
+  max_step: 0.01
+
+# -----------------------------------------------------------------------------
+# Backstepping gains
+#
+# Gain-condition check (critical damping):
+#   k_dx >= 2*sqrt(k_px)  =>  6 >= 2*sqrt(1.5) = 2.45  ✓
+#   k_dy >= 2*sqrt(k_py)  =>  8 >= 2*sqrt(4)   = 4.0   ✓
+#
+# Attitude bandwidth guideline (>>3x position bandwidth):
+#   sqrt(k_phi * g2_hov) >= 3*sqrt(k_px)
+#   g2_hov = sigma_hov * F_max * l_cp / J
+#          = 0.667 * 191763 * 10.5 / 318196.65 ≈ 4.22 [1/s²]
+#   sqrt(25 * 4.22) = 10.3  vs  3*sqrt(1.5) = 3.67  ✓
+# -----------------------------------------------------------------------------
+controller:
+  type: backstepping
+  x_d: 0.0         # landing pad x-coordinate [m]
+
+  # Position loop (outer)
+  # Critical damping: k_dx >= 2*sqrt(k_px), k_dy >= 2*sqrt(k_py)
+  k_px: 0.3        # horizontal position gain     (slow — large offsets at start)
+  k_dx: 1.5        # horizontal velocity damping  (>= 2*sqrt(0.3)=1.09)
+  k_py: 2.0        # vertical position gain
+  k_dy: 5.0        # vertical velocity damping    (>= 2*sqrt(0.5)=1.41)
+
+  # Attitude loop (middle) — ~5-10x faster than position loop
+  k_phi: 6.0       # pitch error gain
+  k_omega: 5.0     # pitch rate error gain
+
+  # Actuator loop (inner) — fastest loop
+  k_delta: 15.0    # nozzle angle error gain
+
+  # Virtual rate reference saturation [rad/s]
+  # Prevents large P_coupling from demanding impossible angular rates
+  alpha1_max: 1.5
+
+  # Command filter
+  tau_filter: 0.01  # filter time constant [s]  (~tau_delta/5)
