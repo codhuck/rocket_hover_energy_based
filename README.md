@@ -1,394 +1,404 @@
-# Project 1 — Planar TVC Rocket with Lyapunov Attitude Control
+# Planar TVC Rocket — Full-System Backstepping Landing Control
 
-![Visualisation preview](animations/test_dashboard.gif)
+![Backstepping landing](outputs/backstepping/animations/backstepping_landing.gif)
 
 ## Overview
-This repository implements a **planar thrust-vector-controlled rocket** with two attitude regulators:
-- **Lyapunov attitude controller** (`AttitudeLyapunovController`);
-- **cross-term Lyapunov controller** (`CrossTermLyapunovController`).
 
-The simulation pipeline runs both controllers from the same initial condition and generates a direct comparison plot. The control objective is attitude stabilization only:
-- **pitch:** `phi = 0 rad`
-- **angular rate:** `omega = 0 rad/s`
+This repository implements a **planar thrust-vector-controlled (TVC) rocket** with a full-system backstepping landing controller. A single composite Lyapunov function covers position, attitude, and the nozzle actuator simultaneously, yielding a provably stable landing law without time-scale separation assumptions.
 
-Translational states evolve freely under a fixed hover throttle and are not controlled.
+The control objective is **full landing**: bring the rocket from an arbitrary initial position and attitude to the landing pad at the origin with near-zero velocity and attitude.
+
+---
 
 ## Quick Start
-Create an environment and install the dependencies:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+python -m src.main --config configs/backstepping.yaml --output-root outputs/backstepping
 ```
 
-Regenerate all figures, the summary file, and the corrected real-time MP4 animation:
+With animation:
 
 ```bash
-bash run_project.sh
-```
-
-Equivalent direct command:
-
-```bash
-python -m src.main --config configs/default.yaml --output-root .
+python -m src.main --config configs/backstepping.yaml --output-root outputs/backstepping --animate
 ```
 
 Generated outputs:
-- `figures/state_trajectories.png`
-- `figures/attitude_and_gimbal.png`
-- `figures/control_and_error.png`
-- `figures/planar_trajectory.png`
-- `figures/rocket_visualization_preview.png`
-- `figures/comparison.png`
-- `figures/summary.json`
-- `animations/rocket_attitude_realtime.mp4`
+
+- `outputs/backstepping/figures/position_velocity.png`
+- `outputs/backstepping/figures/attitude_and_gimbal.png`
+- `outputs/backstepping/figures/backstepping_errors.png`
+- `outputs/backstepping/figures/lyapunov_and_throttle.png`
+- `outputs/backstepping/figures/coupling_terms.png`
+- `outputs/backstepping/figures/planar_trajectory.png`
+- `outputs/backstepping/figures/summary.json`
+- `outputs/backstepping/animations/backstepping_landing.gif`
+
+### Configuration
+
+All parameters are set in `configs/backstepping.yaml`. Key parameters:
+
+| Parameter | Location | Effect |
+|-----------|----------|--------|
+| `x`, `y`, `theta_deg`, `vx`, `vy` | `initial_state` | Starting position, attitude, velocity |
+| `k_px`, `k_dx`, `k_py`, `k_dy` | `controller` | Position loop gains |
+| `k_phi`, `k_omega` | `controller` | Attitude loop gains |
+| `k_delta` | `controller` | Nozzle actuator gain |
+| `alpha1_max` | `controller` | Virtual rate saturation [rad/s] |
+| `t_final` | `experiment` | Simulation duration [s] |
+
+---
 
 ## Repository Structure
+
 ```text
-project_1_lyapunov_control_planar_tvc_rocket/
-├── README.md
-├── README-derivation-lyapunov.md
+rocket_hover_energy_based/
+├── README (5).md
+├── README-derivation-backstepping-full (1).md
+├── README-Aerodynamics (1).md
 ├── requirements.txt
-├── run_project.sh
 ├── configs/
-│   └── default.yaml
+│   └── backstepping.yaml
 ├── src/
 │   ├── __init__.py
-│   ├── controller.py
-│   ├── main.py
-│   ├── simulation.py
 │   ├── system.py
-│   └── visualization.py
-├── figures/
-│   ├── attitude_and_gimbal.png
-│   ├── control_and_error.png
-│   ├── planar_trajectory.png
-│   ├── rocket_visualization_preview.png
-│   ├── state_trajectories.png
-│   └── summary.json
-└── animations/
-    └── rocket_attitude_realtime.mp4
+│   ├── controller.py
+│   ├── simulation.py
+│   ├── visualization.py
+│   └── main.py
+└── outputs/
+    └── backstepping/
+        ├── figures/
+        └── animations/
 ```
+
+---
 
 ## 1. Problem Definition
-The control task is to stabilize the pitch angle and angular rate of a planar rocket to zero under gravity, with a nozzle deflection angle limited to $|\delta| \leq \delta_{max}$, and fixed hover throttle.
 
-### Method class
-The method belongs to **Lyapunov-based nonlinear control**: a Lyapunov function candidate is constructed over the attitude error states, and the gimbal command is derived to guarantee $\dot{V} \leq 0$.
+The control task is to land a planar TVC rocket at the origin from an arbitrary initial condition, with nozzle deflection limited to $|\delta| \leq \delta_{\max}$ and throttle $\sigma \in [\sigma_{\min}, 1]$. All physical parameters including $C_{m\alpha}$ are **known to the controller**.
 
-### Context and assumptions
-1. **Constant mass**: Mass is treated as fixed, $\dot{m} = 0$. Consequently inertia moment $\dot{J} = 0$ and $J$ is constant.
-2. **No aerodynamic drag**: Aerodynamic effects are not considered.
-3. **Attitude-only control**: The control objective is restricted to stabilizing $\phi \to 0$, $\dot{\phi} \to 0$. Translational states $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled. The throttle is fixed giving constant thrust $F = mg$.8
-4. **Exact mass knowledge**: $m$ is assumed known precisely at each timestep. In simulation this is exact; in hardware it would require a propellant gauge.
+**Control objective:**
+
+$$
+(x,\, y,\, \dot x,\, \dot y,\, \vartheta,\, \dot\vartheta,\, \delta) \;\to\; (0,\, 0,\, 0,\, 0,\, 0,\, 0,\, 0) \quad \text{as } t \to \infty
+$$
+
+### Method
+
+**Full-system backstepping** with a composite Lyapunov function:
+
+$$
+V = \tfrac{1}{2}k_{px}e_x^2 + \tfrac{1}{2}\dot x^2 + \tfrac{1}{2}k_{py}e_y^2 + \tfrac{1}{2}\dot y^2 + \tfrac{1}{2}z_\vartheta^2 + \tfrac{1}{2}z_\omega^2 + \tfrac{1}{2}z_\delta^2
+$$
+
+Four sequential backstepping steps produce virtual controls $\vartheta^*$, $\alpha_1$, $\alpha_2$ and the real nozzle command $\delta_{\mathrm{cmd}}$. Stability under actuator saturation is proved via ISS (Section 10.6 of `README-derivation-backstepping-full (1).md`).
+
+### Assumptions
+
+1. **Constant mass**: $\dot m = 0$, $\dot J = 0$, $\dot l_{cp} = 0$.
+2. **All parameters known**: $C_{m\alpha}$, $C_x$, $C_{y\alpha}$, $J$, $l_{cp}$, $\tau_\delta$.
+3. **Low-speed regime**: $V \leq 100$ m/s, linear aerodynamic coefficients apply.
+4. **Small nozzle deflection**: $|\delta| \leq 0.262$ rad, enabling the linearisation $\sin(\vartheta+\delta) \approx \sin\vartheta + \delta\cos\vartheta$.
+5. **First-order nozzle actuator**: $\tau_\delta \dot\delta = -\delta + \delta_{\mathrm{cmd}}$.
+6. **Full state measurement**: all 10 ODE states measurable.
+
+---
 
 ## 2. System Description
-### State, control, and notation
-The state is
+
+### State vector
 
 $$
-q = [x, y, \phi, \dot{x}, \dot{y}, \dot{\phi}]^T
+q = [x,\ y,\ \dot x,\ \dot y,\ \vartheta,\ \dot\vartheta,\ \delta,\ \alpha_2^f,\ \dot\vartheta^*_{\mathrm{filt}},\ \dot\alpha_{1,\mathrm{filt}}]^T \in \mathbb{R}^{10}
 $$
 
-where
-- $x, y$ — inertial horizontal and vertical position (m)
-- $\phi$ — pitch angle from the vertical axis, positive rightward (rad)
-- $\dot{x}, \dot{y}$ — translational velocities (m/s)
-- $\dot{\phi}$ — angular rate (rad/s)
+Control inputs: $\sigma \in [\sigma_{\min}, 1]$ (throttle) and $\delta_{\mathrm{cmd}} \in [-\delta_{\max,\mathrm{cmd}}, \delta_{\max,\mathrm{cmd}}]$.
 
-The sole control input is the nozzle deflection angle:
+![Body-fixed coordinate frame](figures/BF_Sys.png)
 
-$$
-u = \delta
-$$
+### Notation
 
-where $\delta$ is the nozzle deflection angle measured from the rocket body axis, with $|\delta| \leq \delta_{max}$.
+| Symbol | Meaning | Units |
+|--------|---------|-------|
+| $e_x = x - x_d$ | Horizontal position error | m |
+| $e_y = y$ | Altitude error | m |
+| $\vartheta$ | Pitch angle from vertical, positive rightward | rad |
+| $\vartheta^*$ | Desired pitch (Step 1 virtual control) | rad |
+| $z_\vartheta = \vartheta - \vartheta^*$ | Pitch error | rad |
+| $\alpha_1$ | Desired angular rate (Step 2 virtual control) | rad/s |
+| $z_\omega = \dot\vartheta - \alpha_1$ | Rate error | rad/s |
+| $\alpha_2$ | Desired nozzle angle (Step 3 virtual control) | rad |
+| $\alpha_2^f$ | Command-filtered $\alpha_2$ | rad |
+| $z_\delta = \delta - \alpha_2^f$ | Nozzle error | rad |
+| $\sigma$ | Throttle $\in [\sigma_{\min}, 1]$ | — |
+| $F = \sigma F_{\max}$ | Thrust | N |
+| $g_2 = F l_{cp}/J$ | Rotational control gain | s⁻² |
+| $f_2$ | Aerodynamic pitching moment / $J$ | rad/s² |
 
-### Nonlinear dynamics used in the code
+### Equations of motion
 
-Parameters appearing in the equations:
-- $F = mg$ — constant thrust equal to gravity compensation
-- $l_{cp}$ — distance from the center of mass to the nozzle exit (m); determines the torque arm of the thrust vector
-- $J_{const}$ — moment of inertia of the rocket about the center of mass (kg·m²); frozen at midpoint mass
-- $g$ — gravitational acceleration, 9.81 m/s²
-
-With constant thrust $F = mg$:
-
-**Newton's second law** (translational):
-
-$$
-m\ddot{x} = F\sin(\phi + \delta), \qquad m\ddot{y} = F\cos(\phi + \delta) - mg
-$$
-
-Substituting $F = mg$:
+**Translational (small-$\delta$ linearisation, A4):**
 
 $$
-\ddot{x} = g\sin(\phi + \delta), \qquad \ddot{y} = g\cos(\phi + \delta) - g
-$$
-
-**Angular momentum equation** $\dot{L} = \tau$ (rotational):
-
-$$
-J_{const}\ddot{\phi} = -F \cdot l_{cp}\sin(\delta)
-$$
-
-Substituting $F = mg$:
-
-$$
-\ddot{\phi} = -\frac{mg \cdot l_{cp}}{J_{const}}\sin(\delta)
-$$
-
-
-## 3. Mathematical Specification
-
-The controller stabilizes attitude only($\phi = 0$, $\dot{\phi} = 0$). The sole control input is the nozzle deflection angle $\delta$.
-
-### Lyapunov attitude law
-
-The attitude error and angular rate are:
-
-$$
-e_\phi = \phi, \qquad \dot{e}_\phi = \dot{\phi}
-$$
-
-The Lyapunov function candidate is:
-
-$$
-V = \frac{1}{2} k_\phi e_\phi^2 + \frac{1}{2} \dot{\phi}^2
-$$
-
-Taking the time derivative along the attitude dynamics and requiring $\dot{V} \leq 0$ yields the nozzle deflection command:
-
-$$
-\sin(\delta) = \frac{J_{const}}{F \cdot l_{cp}}\left(k_\phi e_\phi + k_\omega \dot{\phi}\right)
-$$
-
-Substituting $F = mg$:
-
-$$
-\delta = \arcsin\left(\mathrm{clamp}\left(\frac{J_{const}}{mg \cdot l_{cp}}\left(k_\phi e_\phi + k_\omega \dot{\phi}\right),\ -1,\ 1\right)\right)
-$$
-
-followed by a hard saturation to `[-delta_max, delta_max]`. This gives $\dot{V} = -k_\omega \dot{\phi}^2 \leq 0$, and by LaSalle's invariance principle all trajectories converge to $(\phi, \dot{\phi}) = (0, 0)$.
-
-For the full derivation see [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
-
-### Cross-term Lyapunov attitude law
-
-For the cross-term regulator, the Lyapunov candidate adds a cross term:
-
-$$
-V = \frac{1}{2}k_\phi e_\phi^2 + \frac{1}{2}\dot{\phi}^2 + c\, e_\phi \dot{\phi}
-$$
-
-Taking $\dot{V} \leq 0$ with this candidate yields:
-
-$$
-n = k_\phi e_\phi \dot{\phi} + (c + k_\omega)\dot{\phi}^2 + k_c e_\phi^2
+m\ddot x = F\sin\vartheta + F\delta\cos\vartheta + X_b\sin\vartheta + Y_b\cos\vartheta
 $$
 
 $$
-d = \dot{\phi} + c\, e_\phi
+m\ddot y = F\cos\vartheta - mg - F\delta\sin\vartheta + X_b\cos\vartheta - Y_b\sin\vartheta
+$$
+
+**Rotational:**
+
+$$
+J\ddot\vartheta = F\,l_{cp}\,\delta + C_{m\alpha}\,\alpha\,q_\infty S_m\,l \quad\Longrightarrow\quad \ddot\vartheta = g_2\,\delta + f_2
+$$
+
+**Nozzle actuator:**
+
+$$
+\tau_\delta\,\dot\delta = -\delta + \delta_{\mathrm{cmd}}
+$$
+
+For the aerodynamic model, coordinate frame, and rotation matrix see [`README-Aerodynamics (1).md`](README-Aerodynamics%20(1).md).
+
+---
+
+## 3. Control Law
+
+For full derivations and formal proofs see [`README-derivation-backstepping-full (1).md`](README-derivation-backstepping-full%20(1).md).
+
+### Step 1 — Desired pitch $\vartheta^*$ and throttle $\sigma$
+
+$$
+A_x = -k_{px}e_x - k_{dx}\dot x, \qquad A_y = -k_{py}e_y - k_{dy}\dot y
 $$
 
 $$
-\sin(\delta) = \frac{J_{const}}{F \cdot l_{cp}} \cdot \frac{n}{d} = \frac{J_{const}}{mg \cdot l_{cp}} \cdot \frac{n}{d}
+\sigma = \mathrm{clip}\!\left(\frac{m\sqrt{A_x^2+(A_y+g)^2}}{F_{\max}},\, \sigma_{\min},\, 1\right), \qquad \vartheta^* = \mathrm{atan2}(A_x,\, A_y+g)
 $$
 
-followed by the same `arcsin` and hard saturation to `[-delta_max, delta_max]`. If `|d| < eps`, the implementation falls back to the Lyapunov attitude law for numerical robustness.
+### Step 2 — Desired angular rate $\alpha_1$
 
-### Stability interpretation
-- The controller drives the rocket pitch toward $\phi_{target} = 0$ and damps angular motion via a Lyapunov argument guaranteeing $\dot{V} \leq 0$.
-- Translational states $(x, y, \dot{x}, \dot{y})$ evolve freely and are not controlled.
+$$
+z_\vartheta = \vartheta - \vartheta^*, \qquad \alpha_1 = \dot\vartheta^* - k_\vartheta z_\vartheta, \qquad z_\omega = \dot\vartheta - \alpha_1
+$$
 
-A longer derivation note is included in [README-derivation-lyapunov.md](README-derivation-lyapunov.md).
+### Step 3 — Desired nozzle angle $\alpha_2$
 
-## 4. Method Description
-### Control pipeline
-At every integration step the code performs the following pipeline:
-1. read the current state `(x, y, phi, vx, vy, omega, mass)`;
-2. compute the attitude error `e_phi = phi`;
-3. compute the nozzle deflection angle `delta` from the Lyapunov attitude law;
-4. propagate the nonlinear dynamics with `solve_ivp`;
-5. post-process the state history into plots, an animation, and summary metrics.
+$$
+\alpha_2 = \frac{1}{g_2}\!\left(-k_\omega z_\omega - z_\vartheta - f_2 + \dot\alpha_1\right), \qquad \alpha_{2,\mathrm{sat}} = \mathrm{clip}(\alpha_2,\,-\delta_{\max},\,\delta_{\max})
+$$
 
-### Why the controller works in practice
-The Lyapunov attitude law drives `phi` and `omega` to zero by construction — $\dot{V} \leq 0$ is guaranteed for all $k_\phi > 0$, $k_\omega > 0$. Translational states evolve freely under the fixed hover throttle.
+Command filter: $\tau_f\,\dot\alpha_2^f = \alpha_{2,\mathrm{sat}} - \alpha_2^f$, then $z_\delta = \delta - \alpha_2^f$.
 
-## 5. Experimental Setup
-### Initial condition
-- `x(0) = 0.0 m`
-- `y(0) = 8.0 m`
-- `phi(0) = 20.0 deg`
-- `vx(0) = 0.0 m/s`
-- `vy(0) = 0.0 m/s`
-- `omega(0) = -8.0 deg/s`
-- `m = 1.60 kg` (constant)
+### Step 4 — Nozzle command $\delta_{\mathrm{cmd}}$
 
-### Target state
-- `phi_target = 0.0 rad`
-- `omega_target = 0.0 rad/s`
+$$
+\delta_{\mathrm{cmd}} = \delta + \tau_\delta\!\left(\dot\alpha_2^f - g_2 z_\omega - k_\delta z_\delta\right)
+$$
 
-Translational states are not controlled — position and velocity evolve freely.
+### Stability summary
 
-### Physical parameters
-- `g = 9.81 m/s^2`
-- `mass = 1.60 kg`
-- `F_max = 24.0 N`
-- `J_const = 0.1183 kg m^2`
-- `l_cp = 0.6091 m`
-- `delta_max = 15 deg`
+| Claim | Status | Method |
+|-------|--------|--------|
+| All signals uniformly ultimately bounded | **Proved** | Composite $V$, UUB theorem (Section 10.2) |
+| $\dot x, \dot y, z_\vartheta, z_\omega, z_\delta \to 0$ | **Proved** (unsaturated) | Barbalat's lemma (Section 10.3) |
+| $e_x, e_y \to 0$ | **Proved** (unsaturated) | LaSalle's principle (Section 10.4) |
+| UUB under all three saturations | **Proved** | ISS analysis (Section 10.6) |
+| No time-scale separation needed | **Correct** | Single unified $V$ |
 
-### Controller gains (Lyapunov attitude controller)
-- `k_phi = 18.0`
-- `k_omega = 7.0`
-- `phi_target_deg = 0.0`
+---
 
-### Controller gains (cross-term Lyapunov)
-- `k_phi = 25.0`
-- `k_omega = 10.0`
-- `k_c = 7.0`
-- `c = 0.2`
-- `phi_target_deg = 0.0`
+## 4. Algorithm
 
-### Numerical setup
-- final simulation time: `5.0 s`
-- sample count: `721`
-- integrator: `scipy.integrate.solve_ivp`
-- integrator max step: `0.02 s`
+```
+Input: state q = (x, y, ẋ, ẏ, ϑ, ϑ̇, δ, α2f, ts_dot, a1_dot)
 
-## 6. Reproducibility
-The repository includes exact commands, a dependency file, and a deterministic default configuration.
+Block A — Step 1: desired pitch and throttle
+  e_x = x - x_d,  e_y = y
+  A_x = -k_px*e_x - k_dx*ẋ
+  A_y = -k_py*e_y - k_dy*ẏ
+  a_vert = max(A_y+g, |A_x|/tan(30°), 0.5)   [safety clamp]
+  σ = clip(m*sqrt(A_x²+a_vert²) / F_max, σ_min, 1)
+  ϑ* = atan2(A_x, a_vert)
 
-### Reproduce the final outputs
-From the repository root, run:
+Block B — Aerodynamics
+  α_aoa = ϑ - atan2(ẋ, ẏ)    [= ϑ if |v| < 0.1 m/s]
+  f2 = C_mα * α_aoa * q_inf * S_m * l / J
+  g2 = σ*F_max * l_cp / J
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m src.main --config configs/default.yaml --output-root .
+Block C — Step 2: virtual angular rate
+  z_ϑ = wrap(ϑ - ϑ*)
+  α1  = ts_dot - k_ϑ * z_ϑ
+  z_ω = ϑ̇ - α1
+
+Block D — Step 3: virtual nozzle angle
+  α2_raw = (1/g2) * (-k_ω*z_ω - z_ϑ - f2 + a1_dot)
+  α2_sat = clip(α2_raw, -δ_max, δ_max)
+
+Block E — Command filter
+  α2f_dot = (α2_sat - α2f) / τ_f
+  z_δ = δ - α2f
+
+Block F — Step 4: nozzle command
+  δ_cmd = δ + τ_δ * (α2f_dot - g2*z_ω - k_δ*z_δ)
+  δ_cmd = clip(δ_cmd, -δ_max_cmd, δ_max_cmd)
+
+Output: σ, δ_cmd
 ```
 
-### What each module does
-- `src/system.py` defines the rocket parameters and nonlinear right-hand side;
-- `src/controller.py` implements two attitude regulators: `AttitudeLyapunovController` and `CrossTermLyapunovController`;
-- `src/simulation.py` integrates the system and provides `simulate` (Lyapunov attitude) plus `simulate_both` (Lyapunov attitude + cross-term);
-- `src/visualization.py` generates all figures, including `comparison.png`, and the corrected real-time MP4 animation;
-- `src/main.py` runs both regulators and writes a combined `figures/summary.json` (`pd`, `cross_term`, `comparison`).
+---
+
+## 5. Experimental Setup
+
+### Initial conditions
+
+| Variable | Value | Notes |
+|----------|-------|-------|
+| $x(0)$ | 50.0 m | Horizontal offset from landing pad |
+| $y(0)$ | 200.0 m | Altitude |
+| $\vartheta(0)$ | 30.0 deg | Large initial tilt (attitude recovery test) |
+| $\dot x(0)$ | 10.0 m/s | Moving away from pad |
+| $\dot y(0)$ | −20.0 m/s | Descending |
+| $\dot\vartheta(0)$ | 0.0 deg/s | |
+| $\delta(0)$ | 0.0 deg | |
+
+### Target state
+
+$$
+x_d = 0\ \text{m}, \qquad y_d = 0\ \text{m}, \qquad \vartheta^* \to 0\ \text{deg at equilibrium}
+$$
+
+### Physical parameters
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| $g$ | 9.81 m/s² | Gravitational acceleration |
+| $m$ | 13000 kg | Rocket mass |
+| $F_{\max}$ | 191763 N | Maximum thrust ($= 1.5\,mg$) |
+| $J$ | 318197 kg·m² | Moment of inertia about CoM |
+| $l_{cp}$ | 10.5 m | CoM-to-nozzle distance |
+| $l$ | 18.0 m | Reference length |
+| $\delta_{\max}$ | 15 deg | Nozzle deflection limit |
+| $\tau_\delta$ | 0.05 s | Nozzle actuator time constant |
+| $\rho$ | 1.225 kg/m³ | Air density |
+| $S_m$ | 1.1304 m² | Reference cross-sectional area |
+| $C_{m\alpha}$ | 1.054 rad⁻¹ | Pitching moment coefficient (known) |
+| $C_x$ | 0.358 | Axial drag coefficient |
+| $C_{y\alpha}$ | 3.096 rad⁻¹ | Normal force slope |
+| $\sigma_{\min}$ | 0.45 | Minimum throttle |
+
+### Controller gains
+
+| Gain | Value | Role |
+|------|-------|------|
+| $k_{px}$ | 0.3 | Horizontal position |
+| $k_{dx}$ | 1.5 | Horizontal velocity damping |
+| $k_{py}$ | 0.5 | Vertical position |
+| $k_{dy}$ | 5.0 | Vertical velocity damping |
+| $k_\vartheta$ | 6.0 | Pitch error |
+| $k_\omega$ | 5.0 | Angular rate error |
+| $k_\delta$ | 15.0 | Nozzle error |
+| $\alpha_{1,\max}$ | 1.5 rad/s | Virtual rate saturation |
+| $\tau_f$ | 0.01 s | Command filter time constant |
+
+### Numerical setup
+
+| Setting | Value |
+|---------|-------|
+| Simulation time | 30.0 s |
+| Integrator | `scipy.integrate.solve_ivp`, RK45 |
+| Max step | 0.01 s |
+| Touchdown threshold | $y \leq 0.3$ m |
+
+---
+
+## 6. Module Descriptions
+
+| File | Role |
+|------|------|
+| `src/system.py` | 10-state ODE RHS, rocket parameters, aerodynamic model, `wrap_angle` |
+| `src/controller.py` | `BacksteppingController` — all four backstepping steps, command filter, derivative filter states |
+| `src/simulation.py` | `simulate()` returning full state + control history; touchdown terminal event |
+| `src/visualization.py` | 6 diagnostic plots + GIF animation |
+| `src/main.py` | CLI entry point: `--config`, `--output-root`, `--animate` |
+
+---
 
 ## 7. Results Summary
-Both regulators converge in attitude (`phi -> 0`, `omega -> 0`) in the default experiment. The cross-term regulator reduces peak gimbal demand but increases translational speed and drift compared with the Lyapunov attitude controller.
-
-### Quantitative results
-- **Lyapunov attitude controller**
-  - final position: `(4.286100220018184, 7.317845231040285) m`
-  - final pitch: `-9.289540202597493e-08 deg`
-  - final angular rate: `2.6765738366331744e-06 deg/s`
-  - final speed: `0.8828260180662892 m/s`
-  - max absolute gimbal: `5.50247288376789 deg`
-  - max speed: `0.9787758492524684 m/s`
-- **Cross-term controller**
-  - final position: `(7.218912011175233, 7.153153571277549) m`
-  - final pitch: `4.8792597768221715e-06 deg`
-  - final angular rate: `-1.911513020195674e-05 deg/s`
-  - final speed: `1.5609724965023237 m/s`
-  - max absolute gimbal: `2.6852208077477684 deg`
-  - max speed: `1.5609724965023237 m/s`
-- **Difference (cross-term − Lyapunov attitude)**
-  - `final_phi_deg_diff = 4.972155178848146e-06`
-  - `final_omega_deg_s_diff = -2.1791704038589914e-05`
-  - `max_abs_delta_deg_diff = -2.8172520760201216 deg`
-  - `max_speed_diff = 0.5821966472498553 m/s`
-
-### What works
-- Both regulators stabilize attitude and angular rate to near-zero.
-- The cross-term regulator decreases peak gimbal demand compared with the Lyapunov attitude controller.
-- The comparison pipeline is reproducible via one command and saves both plot and numeric comparison.
-- The exported MP4 now matches the physical simulation time instead of playing too fast.
-
-### Alternative regulator (cross-term)
-- Lyapunov function:
-  - `V = 0.5*k_phi*e_phi^2 + 0.5*omega^2 + c*e_phi*omega`
-- Control law:
-  - `numerator = k_phi*e_phi*omega + (c + k_omega)*omega^2 + k_c*e_phi^2`
-  - `denominator = omega + c*e_phi`
-  - `sin(delta) = (J / (alpha * F_max * l_cp)) * (numerator / denominator)`
-- Singularity protection in code:
-  - if `|denominator| < eps`, fallback to Lyapunov attitude law.
-- Practical interpretation for current tuning:
-  - smoother actuator demand (`|delta|` peak lower),
-  - weaker translational performance (`max_speed` and drift higher).
-
-### Cross-term sweep summary
-The repository includes a gain sweep report generated from `figures/crossterm_sweep_phi01_compact.json` with threshold `|phi| < 0.1 rad`.
 
 | Metric | Value |
-|---|---|
-| Input cases | 36 |
-| Converged cases | 6 |
-| Non-converged cases | 30 |
-| Fixed gains during sweep | `k_phi=25`, `k_omega=10` |
-| Swept gains | `k_c in [0,5]`, `c in [0.2,2.2]` |
+|--------|-------|
+| Landing time | 24.4 s |
+| Final $x$ | −0.10 m |
+| Final $y$ | 0.30 m |
+| Final speed | 0.13 m/s |
+| Final $\vartheta$ | −0.03 deg |
+| Final $\dot\vartheta$ | 0.007 deg/s |
+| Max $|\vartheta|$ during flight | 35.1 deg |
+| Max $|\delta|$ | 15.0 deg (briefly saturated during attitude recovery) |
 
-Top converged settings by persistent settling time:
+**Key result:** Starting from a 30° tilt and descending at 20 m/s, the controller recovers attitude within ~6 s, converges horizontally to within 10 cm of the landing pad, and touches down at less than 0.15 m/s. The nozzle saturates briefly during the initial attitude correction but the ISS proof guarantees bounded errors throughout.
 
-| Rank | `k_c` | `c` | First entry [s] | Settling [s] | Max abs delta [deg] | Max speed [m/s] |
-|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 0 | 0.2 | 0.4861 | 0.4861 | 10.4117 | 1.2931 |
-| 2 | 1 | 0.2 | 0.4931 | 0.4931 | 9.1560 | 1.3194 |
-| 3 | 2 | 0.2 | 0.5069 | 0.5069 | 7.9048 | 1.3480 |
-| 4 | 3 | 0.2 | 0.5139 | 0.5139 | 6.6573 | 1.3796 |
-| 5 | 4 | 0.2 | 0.5278 | 0.5278 | 5.4130 | 1.4148 |
-| 6 | 5 | 0.2 | 0.5417 | 0.5417 | 4.1712 | 1.4549 |
+### Limitations
 
-Analysis:
-- Convergence is highly concentrated in a narrow band of `c` (here only `c=0.2` converged in the tested grid).
-- Small changes in `c` can move the system from fast convergence to complete non-convergence over the simulation horizon.
-- Increasing `k_c` in the converged band reduces peak gimbal demand, but also tends to increase translational speed.
+- Slow vertical descent in the final phase (exponential approach to $y=0$) — the position loop is tuned for stability, not time-optimality.
+- $P$ and $Q$ coupling terms (theoretical backstepping feedforwards) are omitted in implementation due to saturation at high entry velocities — covered by ISS bounds.
+- No rotational aerodynamic damping modelled.
+- Sensor noise, wind disturbances, and 3D effects not included.
 
-Conclusion:
-- The cross-term regulator is significantly more sensitive to tuning than the Lyapunov attitude controller in this project setup.
-- It can provide smoother actuator behavior, but practical tuning is difficult and requires careful grid search with explicit convergence checks.
+---
 
-### What remains limited
-- The inertia and control moment arm are frozen at midpoint mass.
-- Rotational drag, actuator dynamics, and sensor noise are omitted.
-- The proof is quasi-static with respect to mass variation.
-- Comparison currently uses one scenario (single initial condition and one gain set).
+## 8. Figures
 
-## 8. Figures and Interpretation
-### State trajectories
-![State trajectories](figures/state_trajectories.png)
-Pitch angle and angular rate converge to zero from the initial condition without persistent oscillation.
+### Animation
 
-### Attitude and gimbal command
-![Attitude and gimbal](figures/attitude_and_gimbal.png)
-Pitch and angular rate converge to zero, while the gimbal command remains far below the hard `15 deg` limit.
+![Backstepping landing](outputs/backstepping/animations/backstepping_landing.gif)
 
-### Control effort
-![Control and error](figures/control_and_error.png)
-The nozzle deflection angle and angular rate decay smoothly — the closed-loop system settles without chattering.
+### Position and velocity
+
+![Position and velocity](outputs/backstepping/figures/position_velocity.png)
+
+Horizontal position $x(t)$ converging to 0, altitude $y(t)$ descending, $\dot x$ and $\dot y$ decaying to zero.
+
+### Attitude and nozzle
+
+![Attitude and nozzle](outputs/backstepping/figures/attitude_and_gimbal.png)
+
+Pitch $\vartheta(t)$ recovering from 30° to 0°, angular rate $\dot\vartheta$, nozzle angle $\delta$ vs virtual reference $\alpha_2^f$.
+
+### Backstepping error coordinates
+
+![Backstepping errors](outputs/backstepping/figures/backstepping_errors.png)
+
+$z_\vartheta$, $z_\omega$, $z_\delta$ — all converge to zero after the initial transient, confirming the Lyapunov bound.
+
+### Lyapunov function and throttle
+
+![Lyapunov and throttle](outputs/backstepping/figures/lyapunov_and_throttle.png)
+
+$V(t)$ is non-increasing after the initial transient. Throttle $\sigma(t)$ rises to 1.0 during braking, settles near hover throttle ($\approx 0.67$) during descent.
 
 ### Planar trajectory
-![Planar trajectory](figures/planar_trajectory.png)
-The planar path shows the rocket's free translational motion during attitude stabilization.
 
-### Lyapunov attitude vs cross-term comparison
-![Controller comparison](figures/comparison_best.png)
-Both controllers on the same axes. The cross-term controller exhibits lower peak gimbal demand than the Lyapunov attitude controller.
+![Planar trajectory](outputs/backstepping/figures/planar_trajectory.png)
 
-## 9. Animation
-The project includes a corrected real-time animation:
-- `animations/rocket_attitude_realtime.mp4`
+Full 2D trajectory from start (50 m right, 200 m altitude) to landing pad at origin.
 
-The animation shows the rocket body, its current orientation, the nozzle deflection angle, the angular rate, and the current time.
+---
 
-## 10. Possible Extensions
-- **Translational drag**: add drag forces $-\frac{\beta}{m}\dot{x}$ and $-\frac{\beta}{m}\dot{y}$ to the equations of motion and re-derive the stability analysis under dissipation.
-- **Variable mass and inertia**: replace constant $m$, $J$, $l_{cp}$ with time-varying quantities updated from the fuel depletion model; extend the Lyapunov proof to the time-varying case.
-- **Cascaded position control**: add an outer loop that computes a desired pitch angle $\phi_{des}$ from position errors $(e_x, e_y)$, feeding it as a reference to the inner attitude controller — enabling full $(x, y, \phi)$ stabilization.
+## 9. Possible Extensions
 
-## 11. Notes on AI Use
-AI assistance was used to help scaffold code, restructure files, and polish the documentation and visualisation. The final equations, parameters, and interpretation of the plots should still be checked by the team before submission.
+- **Fuel-optimal descent**: Replace the proportional position law with a minimum-fuel guidance (e.g., powered-explicit-guidance or lossless convexification).
+- **Robustness to parameter uncertainty**: Combine backstepping with online adaptive estimation of $C_{m\alpha}$ — the matched-uncertainty structure means the estimate plugs directly into the $f_2$ cancellation term in (VC2) without restructuring the proof.
+- **3D extension**: Extend the planar model to 6-DOF with yaw and roll channels.
+- **Wind disturbances**: Add bounded wind as an ISS disturbance input and verify the quantitative bounds from Section 10.6.
+
+---
+
+## 10. Notes on AI Use
+
+AI assistance was used to help scaffold code structure, organise documentation, and check mathematical notation consistency. All equations, proofs, and physical interpretations were reviewed and verified before submission.

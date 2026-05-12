@@ -97,7 +97,7 @@ $$
 \alpha = \vartheta - \mathrm{atan2}(\dot x,\, \dot y)
 $$
 
-This is the angle between the body axis and the velocity vector, measured positive nose-up. At zero airspeed ($V < V_{\min} \approx 0.1$ m/s), aerodynamic forces vanish and $\alpha$ is set to $\vartheta$ by convention.
+This is the angle between the body axis and the velocity vector, measured positive nose-up. At zero airspeed ($V < V_{\min} \approx 0.1$ m/s), aerodynamic forces vanish and $\alpha$ is set to 0 by convention.
 
 **Structural observation.** In (T1)–(T2), $\vartheta$ drives position through the dominant terms $F\sin\vartheta$, $F\cos\vartheta$, while $\delta$ influences position through the smaller coupling terms $F\delta\cos\vartheta$, $-F\delta\sin\vartheta$. Retaining these coupling terms is what makes the full-backstepping approach stronger than a simple outer-inner loop design.
 
