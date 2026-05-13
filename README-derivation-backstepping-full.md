@@ -74,7 +74,12 @@ Control inputs: $\sigma \in [\sigma_{\min}, 1]$ (throttle) and $\delta_{\mathrm{
 
 **A4. Small nozzle deflection for translational linearisation.** $|\delta| \leq \delta_{\max} \leq 0.25$ rad, so:
 
-$$\sin(\vartheta + \delta) \approx \sin\vartheta + \delta\cos\vartheta, \qquad \cos(\vartheta + \delta) \approx \cos\vartheta - \delta\sin\vartheta$$
+$$
+\begin{aligned}
+\sin(\vartheta + \delta) &\approx \sin\vartheta + \delta\cos\vartheta \\
+\cos(\vartheta + \delta) &\approx \cos\vartheta - \delta\sin\vartheta
+\end{aligned}
+$$
 
 Error: $|\sin(\vartheta+\delta) - (\sin\vartheta + \delta\cos\vartheta)| \leq \delta^2/2 < 3\%$ for $|\delta| \leq 0.25$ rad.
 
@@ -128,7 +133,10 @@ Note that (NL1)–(NL2) are fully coupled: the translational accelerations depen
 Applying A4 ($|\delta| \leq 0.25$ rad) to the thrust-vector projection in (NL1)–(NL2):
 
 $$
-\sin(\vartheta + \delta) \approx \sin\vartheta + \delta\cos\vartheta, \qquad \cos(\vartheta + \delta) \approx \cos\vartheta - \delta\sin\vartheta
+\begin{aligned}
+\sin(\vartheta + \delta) &\approx \sin\vartheta + \delta\cos\vartheta \\
+\cos(\vartheta + \delta) &\approx \cos\vartheta - \delta\sin\vartheta
+\end{aligned}
 $$
 
 Substituting into (NL1)–(NL2) and projecting body-frame aerodynamic forces to the inertial frame:
@@ -163,7 +171,10 @@ $$
 
 Define the shorthand:
 $$
-f_2 = \frac{C_{m\alpha}\,\alpha\,q_\infty S_m\,l}{J}, \qquad g_2 = \frac{F\,l_{cp}}{J} > 0
+\begin{aligned}
+f_2 &= \frac{C_{m\alpha}\,\alpha\,q_\infty S_m\,l}{J} \\
+g_2 &= \frac{F\,l_{cp}}{J} > 0
+\end{aligned}
 $$
 
 so that $\ddot\vartheta = g_2\,\delta + f_2$. Note that $C_{m\alpha} > 0$ means the rocket body is **aerodynamically unstable** — a positive angle of attack produces a positive (nose-up) pitching moment, which amplifies the perturbation. The controller must actively cancel $f_2$ via the (VC2) term $+\dot\alpha_1 - f_2$ in the nozzle reference.
@@ -181,7 +192,10 @@ $$
 Error coordinates:
 
 $$
-e_x = x - x_d, \qquad e_y = y, \qquad \dot e_x = \dot x, \qquad \dot e_y = \dot y
+\begin{aligned}
+e_x &= x - x_d, \quad e_y = y \\
+\dot e_x &= \dot x, \quad \dot e_y = \dot y
+\end{aligned}
 $$
 
 The full objective: $(e_x,\, e_y,\, \dot x,\, \dot y,\, \vartheta,\, \dot\vartheta,\, \delta) \to 0$ as $t \to \infty$.
@@ -228,12 +242,18 @@ First, choose the desired accelerations:
 
 
 $$
-A_x = -k_{px}e_x - k_{dx}\dot x, \qquad A_y = -k_{py}e_y - k_{dy}\dot y \tag{O1}
+\begin{aligned}
+A_x &= -k_{px}e_x - k_{dx}\dot x \\
+A_y &= -k_{py}e_y - k_{dy}\dot y
+\end{aligned}
+\tag{O1}
 $$
 
 and require $(F/m)\sin\vartheta^* = A_x$, $(F/m)\cos\vartheta^* = A_y + g$. This gives:
 
-> **Remark (aerodynamics omitted from feedforward).** The desired accelerations (O1) account only for thrust, not for aerodynamic forces $X_b$, $Y_b$. Including them would make the computation circular: computing $\vartheta^*$ requires knowing $X_b, Y_b$, which depend on the angle of attack $\alpha = \vartheta - \mathrm{atan2}(\dot x, \dot y)$, which in turn depends on $\vartheta^*$. Instead, aerodynamic forces are treated as bounded disturbances — they appear as extra terms when (T1)–(T2) are substituted into $\dot V_\mathrm{pos}$, and are absorbed into the ISS bound $D$ of Section 10.5. This is justified because during the landing burn thrust dominates aerodynamics by roughly an order of magnitude, so the feedforward error is small and the feedback loop rejects the remainder.
+<blockquote>
+<strong>Remark (aerodynamics omitted from feedforward).</strong> The desired accelerations (O1) account only for thrust, not for aerodynamic forces $X_b$, $Y_b$. Including them would make the computation circular: computing $\vartheta^*$ requires knowing $X_b, Y_b$, which depend on the angle of attack $\alpha = \vartheta - \mathrm{atan2}(\dot x, \dot y)$, which in turn depends on $\vartheta^*$. Instead, aerodynamic forces are treated as bounded disturbances — they appear as extra terms when (T1)–(T2) are substituted into $\dot V_\mathrm{pos}$, and are absorbed into the ISS bound $D$ of Section 10.5. This is justified because during the landing burn thrust dominates aerodynamics by roughly an order of magnitude, so the feedforward error is small and the feedback loop rejects the remainder.
+</blockquote>
 
 $$
 \boxed{\sigma = \mathrm{clip}\!\left(\frac{m\sqrt{A_x^2 + (A_y+g)^2}}{F_{\max}},\, \sigma_{\min},\, 1\right)} \tag{O2}
@@ -502,7 +522,12 @@ $$
 Each term in the bound is shown bounded below:
 
 **$|z_\omega|$ and $|z_\vartheta|$** are the attitude tracking errors ($z_\vartheta = \vartheta - \vartheta^*$, $z_\omega = \dot\vartheta - \alpha_1$). Since $V \geq \tfrac{1}{2}z_\vartheta^2$ and $V \geq \tfrac{1}{2}z_\omega^2$ by the structure of (V4):
-$$|z_\vartheta| \leq \sqrt{2V}, \qquad |z_\omega| \leq \sqrt{2V}$$
+$$
+\begin{aligned}
+|z_\vartheta| &\leq \sqrt{2V} \\
+|z_\omega| &\leq \sqrt{2V}
+\end{aligned}
+$$
 Both are bounded by $\sqrt{2V(0)}$ initially. The UUB result of Section 10.2 then guarantees $V(t) \leq V_{\max}$ for all $t$, so the bound holds globally.
 
 **$|f_2|$** is the aerodynamic pitching moment normalised by inertia: $f_2 = C_{m\alpha}\,\alpha\,q_\infty S_m l / J$. It depends on airspeed $V = \sqrt{\dot x^2 + \dot y^2}$ (bounded by physical limits of the scenario) and angle of attack $\alpha = \vartheta - \mathrm{atan2}(\dot x, \dot y)$. The pitch $\vartheta$ is bounded via $\vartheta = \vartheta^* + z_\vartheta$, where $\vartheta^* = \mathrm{atan2}(A_x, A_y+g)$ depends only on the bounded position errors $e_x, \dot x, e_y, \dot y$ (covered by $V_\mathrm{pos} \leq V$). Therefore:
@@ -528,7 +553,10 @@ $$
 This means $\dot V < 0$ whenever $V$ is large enough that the negative terms dominate $\mu$. By standard arguments (see Khalil, Theorem 4.18), all signals are **uniformly ultimately bounded**: they converge to and remain within the compact set:
 
 $$
-\Omega = \Bigl\{ V \leq \tfrac{\mu}{c} \Bigr\}, \qquad c = \min(k_{dx}',\, k_{dy}',\, k_\vartheta,\, k_\omega,\, k_\delta)
+\begin{aligned}
+\Omega &= \Bigl\{ V \leq \tfrac{\mu}{c} \Bigr\} \\
+c &= \min(k_{dx}',\, k_{dy}',\, k_\vartheta,\, k_\omega,\, k_\delta)
+\end{aligned}
 $$
 
 **Theorem (UUB).** Under the control law (CL), virtual controls (VC1)–(VC2), and Assumptions A1–A7, if gains satisfy (C-eps) strictly, then all signals $(e_x, \dot x, e_y, \dot y, z_\vartheta, z_\omega, z_\delta)$ are **uniformly ultimately bounded**: they enter and remain in the compact set $\Omega = \{V \leq \mu/c\}$ in finite time. The transient bound is:
@@ -540,7 +568,10 @@ $$
 Reading off individual bounds from $V(t) \leq V_{\max}$:
 
 $$
-|e_x(t)| \leq \sqrt{\frac{2V_{\max}}{k_{px}}} \triangleq B_{e_x}, \qquad |\dot x(t)| \leq \sqrt{2V_{\max}} \triangleq B_{\dot x}
+\begin{aligned}
+|e_x(t)| &\leq \sqrt{\frac{2V_{\max}}{k_{px}}} \triangleq B_{e_x} \\
+|\dot x(t)| &\leq \sqrt{2V_{\max}} \triangleq B_{\dot x}
+\end{aligned}
 $$
 
 and analogously for $e_y$, $\dot y$, $z_\vartheta$, $z_\omega$, $z_\delta$. All bounds depend only on $V(0)$, $\mu$, and the gains. $\square$
@@ -635,7 +666,10 @@ $$
 $$
 
 $$
-\alpha_{2,\mathrm{sat}} = \mathrm{clip}(\alpha_{2,\mathrm{raw}},\,-\delta_{\max},\,\delta_{\max}), \qquad \delta_{\mathrm{cmd},\mathrm{sat}} = \mathrm{clip}(\delta_{\mathrm{cmd}},\,-\delta_{\max,\mathrm{cmd}},\,\delta_{\max,\mathrm{cmd}})
+\begin{aligned}
+\alpha_{2,\mathrm{sat}} &= \mathrm{clip}(\alpha_{2,\mathrm{raw}},\,-\delta_{\max},\,\delta_{\max}) \\
+\delta_{\mathrm{cmd},\mathrm{sat}} &= \mathrm{clip}(\delta_{\mathrm{cmd}},\,-\delta_{\max,\mathrm{cmd}},\,\delta_{\max,\mathrm{cmd}})
+\end{aligned}
 $$
 
 This section proves that the closed-loop system remains **input-to-state stable (ISS)** with respect to the saturation errors, giving a rigorous global result without assuming saturation never occurs.
@@ -647,7 +681,9 @@ Three saturations are active in the implementation. Each is modelled as an addit
 **$\alpha_1$ saturation.** Define:
 
 $$
-d_{\vartheta} = \alpha_{1,\mathrm{sat}} - \alpha_{1,\mathrm{raw}}, \qquad |d_{\vartheta}| \leq 2\alpha_{1,\max}
+\begin{aligned}
+d_{\vartheta} &= \alpha_{1,\mathrm{sat}} - \alpha_{1,\mathrm{raw}}, \quad |d_{\vartheta}| \leq 2\alpha_{1,\max}
+\end{aligned}
 $$
 
 This enters the $z_\omega$ dynamics as $-d_\vartheta$ (since $z_\omega = \dot\vartheta - \alpha_1$ and $\alpha_1$ is clipped), giving a bounded disturbance term $|{-d_\vartheta}| \leq 2\alpha_{1,\max} \triangleq \bar d_\vartheta$.
@@ -655,7 +691,9 @@ This enters the $z_\omega$ dynamics as $-d_\vartheta$ (since $z_\omega = \dot\va
 **$\alpha_2$ saturation.** Define:
 
 $$
-d_\omega = \alpha_{2,\mathrm{sat}} - \alpha_{2,\mathrm{raw}}, \qquad |d_\omega| \leq 2\delta_{\max}
+\begin{aligned}
+d_\omega &= \alpha_{2,\mathrm{sat}} - \alpha_{2,\mathrm{raw}}, \quad |d_\omega| \leq 2\delta_{\max}
+\end{aligned}
 $$
 
 This propagates through the $z_\omega$ dynamics with gain $g_2$, giving bounded disturbance $|g_2 d_\omega| \leq g_{2,\max} \cdot 2\delta_{\max} \triangleq \bar d_\omega$.
@@ -663,7 +701,9 @@ This propagates through the $z_\omega$ dynamics with gain $g_2$, giving bounded 
 **$\delta_{\mathrm{cmd}}$ saturation.** Define:
 
 $$
-d_\delta = \delta_{\mathrm{cmd},\mathrm{sat}} - \delta_{\mathrm{cmd}}, \qquad |d_\delta| \leq 2\delta_{\max,\mathrm{cmd}}
+\begin{aligned}
+d_\delta &= \delta_{\mathrm{cmd},\mathrm{sat}} - \delta_{\mathrm{cmd}}, \quad |d_\delta| \leq 2\delta_{\max,\mathrm{cmd}}
+\end{aligned}
 $$
 
 This enters the $z_\delta$ dynamics divided by $\tau_\delta$, giving bounded disturbance $|d_\delta/\tau_\delta| \leq 2\delta_{\max,\mathrm{cmd}}/\tau_\delta \triangleq \bar d_\delta$.
@@ -770,7 +810,10 @@ $$
 Define:
 
 $$
-c = \min\!\left(k_{dx}'',\, k_{dy}'',\, \frac{k_\vartheta}{2},\, \frac{k_\omega}{4},\, \frac{k_\delta}{8}\right), \qquad D = D'
+\begin{aligned}
+c &= \min\!\left(k_{dx}'',\, k_{dy}'',\, \frac{k_\vartheta}{2},\, \frac{k_\omega}{4},\, \frac{k_\delta}{8}\right) \\
+D &= D'
+\end{aligned}
 $$
 
 From (ISS4), $\dot V \leq 0$ whenever each squared error term exceeds $D/(\text{its coefficient})$. By Khalil Theorem 4.18, all signals are **uniformly ultimately bounded** and converge to:
@@ -784,7 +827,10 @@ Since $V$ does not contain position errors $e_x, e_y$ with coefficients that app
 **Theorem (UUB under saturation).** Under Assumptions A1–A7, gain condition (C-eps) (extended to cover the $Qz_\delta$ term), and $k_\omega > 1/k_\vartheta + 1$, the closed-loop system with saturated controls is **uniformly ultimately bounded**: all states enter and remain in $\mathcal{B}$. The residual bound on attitude errors is:
 
 $$
-|z_\omega|_{\infty} \leq \sqrt{\frac{2D}{c\,k_\omega}}, \qquad |z_\delta|_{\infty} \leq \sqrt{\frac{2D}{c\,k_\delta}}
+\begin{aligned}
+|z_\omega|_{\infty} &\leq \sqrt{\frac{2D}{c\,k_\omega}} \\
+|z_\delta|_{\infty} &\leq \sqrt{\frac{2D}{c\,k_\delta}}
+\end{aligned}
 $$
 
 #### 10.5.6 Quantitative Bound for the Project Parameters
@@ -799,7 +845,11 @@ With the physical parameters and current gains from `configs/backstepping.yaml`:
 With $k_\omega = 5$, $k_\delta = 15$, $\tau_\delta = 0.05$ s, the three contributions to $D'$ are:
 
 $$
-\frac{2g_{2,\max}^2\bar d_\omega^2}{k_\omega} \approx 175.8, \qquad \frac{2\bar d_\vartheta^2}{k_\omega} \approx 3.6, \qquad \frac{4\bar d_\delta^2}{k_\delta\tau_\delta^2} \approx 11697
+\begin{aligned}
+\frac{2g_{2,\max}^2\bar d_\omega^2}{k_\omega} &\approx 175.8 \\
+\frac{2\bar d_\vartheta^2}{k_\omega} &\approx 3.6 \\
+\frac{4\bar d_\delta^2}{k_\delta\tau_\delta^2} &\approx 11697
+\end{aligned}
 $$
 
 The $\delta_{\mathrm{cmd}}$ clipping term dominates completely — it is amplified by $1/\tau_\delta^2 = 400$. Total $D' \approx \mu + 11876$.
@@ -838,7 +888,9 @@ This is a worst-case bound assuming all three clipping saturations are **permane
 11. ϑ*_dot  ≈ filtered analytically (see Section 14)
 ```
 
-> **Safety clamping (steps 4–6).** The theoretical design requires only $a_{\min} = 0$ for the Lyapunov proof; the implementation enforces $a_{\min} = 0.5\ \mathrm{m/s^2}$ and the tilt limit $\phi_{\lim} = 30°$ to keep the rocket from commanding full free-fall or excessive tilt. The clamp on $A_x$ ensures $|\vartheta^*| \leq \phi_{\lim}$ exactly. These modifications introduce a bounded error in (O1) that is handled by the ISS argument of Section 10.5.
+<blockquote>
+<strong>Safety clamping (steps 4–6).</strong> The theoretical design requires only $a_{\min} = 0$ for the Lyapunov proof; the implementation enforces $a_{\min} = 0.5\ \mathrm{m/s^2}$ and the tilt limit $\phi_{\lim} = 30°$ to keep the rocket from commanding full free-fall or excessive tilt. The clamp on $A_x$ ensures $|\vartheta^*| \leq \phi_{\lim}$ exactly. These modifications introduce a bounded error in (O1) that is handled by the ISS argument of Section 10.5.
+</blockquote>
 
 **Block B — Aerodynamics**
 
@@ -859,11 +911,17 @@ This is a worst-case bound assuming all three clipping saturations are **permane
 17. α1_dot ≈ (α1(t) - α1(t-Δt)) / Δt
 ```
 
-> **Implementation note — P-coupling omission.** The theoretical formula (VC1) includes the term $-(F/m)(\dot x\cos\vartheta^* - \dot y\sin\vartheta^*)$. In practice this reaches 60+ rad/s at high entry velocities and permanently saturates $\alpha_1$, destabilising the inner loops. The simplified form $\alpha_1 = \dot\vartheta^* - k_\vartheta z_\vartheta$ is used instead. The omitted P term is a bounded disturbance covered by Section 10.5.
+<blockquote>
+<strong>Implementation note — P-coupling omission.</strong> The theoretical formula (VC1) includes the term $-(F/m)(\dot x\cos\vartheta^* - \dot y\sin\vartheta^*)$. In practice this reaches 60+ rad/s at high entry velocities and permanently saturates $\alpha_1$, destabilising the inner loops. The simplified form $\alpha_1 = \dot\vartheta^* - k_\vartheta z_\vartheta$ is used instead. The omitted P term is a bounded disturbance covered by Section 10.5.
+</blockquote>
 
-> **Implementation note — filtered derivatives.** The implementation propagates $\dot\vartheta^*$ and $\dot\alpha_1$ as ODE states (`ts_dot`, `a1_dot`) driven by first-order filters toward their instantaneous analytical values (bandwidth $N = 50\ \mathrm{rad/s}$). This means the $\dot\vartheta^*$ used in $\alpha_1$ and the $\dot\alpha_1$ used in $\alpha_2$ are slightly lagged. The lag error is bounded by $|\dot\vartheta^*_{\mathrm{inst}} - \dot\vartheta^*_{\mathrm{filt}}| \leq C/N$ for a constant $C$ determined by the rate of change of $\dot\vartheta^*$, and constitutes another bounded disturbance within the ISS framework.
+<blockquote>
+<strong>Implementation note — filtered derivatives.</strong> The implementation propagates $\dot\vartheta^*$ and $\dot\alpha_1$ as ODE states (`ts_dot`, `a1_dot`) driven by first-order filters toward their instantaneous analytical values (bandwidth $N = 50\ \mathrm{rad/s}$). This means the $\dot\vartheta^*$ used in $\alpha_1$ and the $\dot\alpha_1$ used in $\alpha_2$ are slightly lagged. The lag error is bounded by $|\dot\vartheta^*_{\mathrm{inst}} - \dot\vartheta^*_{\mathrm{filt}}| \leq C/N$ for a constant $C$ determined by the rate of change of $\dot\vartheta^*$, and constitutes another bounded disturbance within the ISS framework.
+</blockquote>
 
-> **Implementation note — $\alpha_1$ saturation.** The implementation clips $\alpha_1$ to $\pm\alpha_{1,\max}$ (default 2 rad/s). This is an additional saturation not present in the theoretical derivation. It introduces a bounded disturbance in the $z_\omega$ dynamics analogous to the $\alpha_2$ saturation analysed in Section 10.5, with $\bar d_{\alpha_1} = 2\alpha_{1,\max}$ replacing $2\delta_{\max}$.
+<blockquote>
+<strong>Implementation note — alpha_1 saturation.</strong> The implementation clips $\alpha_1$ to $\pm\alpha_{1,\max}$ (default 2 rad/s). This is an additional saturation not present in the theoretical derivation. It introduces a bounded disturbance in the $z_\omega$ dynamics analogous to the $\alpha_2$ saturation analysed in Section 10.5, with $\bar d_{\alpha_1} = 2\alpha_{1,\max}$ replacing $2\delta_{\max}$.
+</blockquote>
 
 **Block D — Step 3: Virtual control 3 ($\alpha_2$)**
 
@@ -880,7 +938,9 @@ This is a worst-case bound assuming all three clipping saturations are **permane
 22. z_δ = δ - α2f
 ```
 
-> **Command filtering and the modified $z_\delta$.** The Lyapunov derivation (Sections 8–9) defines $z_\delta = \delta - \alpha_2$ and uses $\dot\alpha_2$ in (CL). In the implementation, $\alpha_2$ is replaced by its filtered version $\alpha_2^f$, so $z_\delta = \delta - \alpha_2^f$ and $\dot\alpha_2^f$ enters (CL). The filter error $e_f = \alpha_2^f - \alpha_2$ satisfies $\dot e_f = -e_f/\tau_f + (\alpha_{2,\mathrm{sat}} - \alpha_2)/\tau_f$, which is bounded. Command filtering is standard practice (Farrell et al., 2005) to avoid differentiating $\alpha_2$ analytically; the resulting filter error introduces an additional bounded disturbance of order $O(\tau_f)$ that is absorbed by the ISS bound of Section 10.5.
+<blockquote>
+<strong>Command filtering and the modified z_delta.</strong> The Lyapunov derivation (Sections 8–9) defines $z_\delta = \delta - \alpha_2$ and uses $\dot\alpha_2$ in (CL). In the implementation, $\alpha_2$ is replaced by its filtered version $\alpha_2^f$, so $z_\delta = \delta - \alpha_2^f$ and $\dot\alpha_2^f$ enters (CL). The filter error $e_f = \alpha_2^f - \alpha_2$ satisfies $\dot e_f = -e_f/\tau_f + (\alpha_{2,\mathrm{sat}} - \alpha_2)/\tau_f$, which is bounded. Command filtering is standard practice (Farrell et al., 2005) to avoid differentiating $\alpha_2$ analytically; the resulting filter error introduces an additional bounded disturbance of order $O(\tau_f)$ that is absorbed by the ISS bound of Section 10.5.
+</blockquote>
 
 **Block F — Step 4: Real control ($\delta_{\mathrm{cmd}}$)**
 
@@ -889,7 +949,9 @@ This is a worst-case bound assuming all three clipping saturations are **permane
 24. δ_cmd = clip(δ_cmd, -δ_max_cmd, δ_max_cmd)
 ```
 
-> **Implementation note — Q-coupling omission.** The theoretical formula (CL) includes the term $-Q = -(F/m)(\dot x\cos\vartheta - \dot y\sin\vartheta)$. As with P-coupling in Block C, this term reaches 50+ rad/s at high entry velocities and, multiplied by $\tau_\delta$, produces nozzle commands far exceeding $\delta_{\max,\mathrm{cmd}}$. The term is omitted in the implementation; the resulting bounded error is covered by the ISS analysis of Section 10.5.
+<blockquote>
+<strong>Implementation note — Q-coupling omission.</strong> The theoretical formula (CL) includes the term $-Q = -(F/m)(\dot x\cos\vartheta - \dot y\sin\vartheta)$. As with P-coupling in Block C, this term reaches 50+ rad/s at high entry velocities and, multiplied by $\tau_\delta$, produces nozzle commands far exceeding $\delta_{\max,\mathrm{cmd}}$. The term is omitted in the implementation; the resulting bounded error is covered by the ISS analysis of Section 10.5.
+</blockquote>
 
 **Output:** $[\sigma,\ \delta_{\mathrm{cmd}}]$
 
@@ -906,7 +968,10 @@ $$
 ### Critical damping of position loop
 
 $$
-k_{dx} \geq 2\sqrt{k_{px}}, \qquad k_{dy} \geq 2\sqrt{k_{py}}
+\begin{aligned}
+k_{dx} &\geq 2\sqrt{k_{px}} \\
+k_{dy} &\geq 2\sqrt{k_{py}}
+\end{aligned}
 $$
 
 ### Attitude loop bandwidth
@@ -914,7 +979,10 @@ $$
 No formal time-scale separation is required, but faster attitude convergence reduces the time during which the $\alpha_2\cdot Q$ residual is active. A practical guideline:
 
 $$
-\sqrt{k_\vartheta\, g_{2,\mathrm{hov}}} \geq 3\,\sqrt{k_{px}}, \qquad g_{2,\mathrm{hov}} = \frac{\sigma_{\mathrm{hov}} F_{\max} l_{cp}}{J}
+\begin{aligned}
+\sqrt{k_\vartheta\, g_{2,\mathrm{hov}}} &\geq 3\,\sqrt{k_{px}} \\
+g_{2,\mathrm{hov}} &= \frac{\sigma_{\mathrm{hov}} F_{\max} l_{cp}}{J}
+\end{aligned}
 $$
 
 ### Cross-term damping condition
