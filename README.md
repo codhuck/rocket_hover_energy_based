@@ -119,13 +119,13 @@ $$
 **Rotational:**
 
 $$
-J\ddot\vartheta = F\,l_{cp}\,\delta + C_{m\alpha}\,\alpha\,q_\infty S_m\,l \quad\Longrightarrow\quad \ddot\vartheta = g_2\,\delta + f_2
+J\ddot\vartheta = F l_{cp} \delta + C_{m\alpha} \alpha q_\infty S_m l \quad\Longrightarrow\quad \ddot\vartheta = g_2 \delta + f_2
 $$
 
 **Nozzle actuator:**
 
 $$
-\tau_\delta\,\dot\delta = -\delta + \delta_{\mathrm{cmd}}
+\tau_\delta \dot\delta = -\delta + \delta_{\mathrm{cmd}}
 $$
 
 ### Notation
