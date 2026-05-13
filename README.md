@@ -82,11 +82,19 @@ Four sequential backstepping steps produce virtual controls $\vartheta^*$, $\alp
 
 ### State vector
 
+The **plant state** (7 variables) is what the Lyapunov derivation reasons about:
+
 $$
-q = [x,\ y,\ \dot x,\ \dot y,\ \vartheta,\ \dot\vartheta,\ \delta,\ \alpha_2^f,\ \dot\vartheta^*_{\mathrm{filt}},\ \dot\alpha_{1,\mathrm{filt}}]^T \in \mathbb{R}^{10}
+s = [x,\ y,\ \dot x,\ \dot y,\ \vartheta,\ \dot\vartheta,\ \delta]^T \in \mathbb{R}^7
 $$
 
-Control inputs: $\sigma \in [\sigma_{\min}, 1]$ (throttle) and $\delta_{\mathrm{cmd}} \in [-\delta_{\max,\mathrm{cmd}}, \delta_{\max,\mathrm{cmd}}]$.
+The **ODE state** integrated by the simulator is extended to 10 by three internal controller states:
+
+$$
+q = [x,\ y,\ \dot x,\ \dot y,\ \vartheta,\ \dot\vartheta,\ \delta,\ \underbrace{\alpha_2^f}_{\text{cmd filter}},\ \underbrace{\dot\vartheta^*_{\mathrm{filt}}}_{\text{deriv filter}},\ \underbrace{\dot\alpha_{1,\mathrm{filt}}}_{\text{deriv filter}}]^T \in \mathbb{R}^{10}
+$$
+
+The three extra states are first-order filters that avoid algebraic differentiation inside the ODE; they do not appear in the stability proof. Control inputs: $\sigma \in [\sigma_{\min}, 1]$ (throttle) and $\delta_{\mathrm{cmd}} \in [-\delta_{\max,\mathrm{cmd}}, \delta_{\max,\mathrm{cmd}}]$.
 
 ![Body-fixed coordinate frame](figures/BF_Sys.png)
 
