@@ -159,7 +159,7 @@ A_x = -k_{px}e_x - k_{dx}\dot x, \qquad A_y = -k_{py}e_y - k_{dy}\dot y
 $$
 
 $$
-\sigma = \mathrm{clip}\!\left(\frac{m\sqrt{A_x^2+(A_y+g)^2}}{F_{\max}}, \sigma_{\min}, 1\right), \qquad \vartheta^* = \mathrm{atan2}(A_x, A_y+g)
+\sigma = \mathrm{clip}\left(\frac{m\sqrt{A_x^2+(A_y+g)^2}}{F_{\max}}, \sigma_{\min}, 1\right), \qquad \vartheta^* = \mathrm{atan2}(A_x, A_y+g)
 $$
 
 ### Step 2 — Desired angular rate $\alpha_1$
@@ -171,7 +171,7 @@ $$
 ### Step 3 — Desired nozzle angle $\alpha_2$
 
 $$
-\alpha_2 = \frac{1}{g_2}\!\left(-k_\omega z_\omega - z_\vartheta - f_2 + \dot\alpha_1\right), \qquad \alpha_{2,\mathrm{sat}} = \mathrm{clip}(\alpha_2, -\delta_{\max}, \delta_{\max})
+\alpha_2 = \frac{1}{g_2}\left(-k_\omega z_\omega - z_\vartheta - f_2 + \dot\alpha_1\right), \qquad \alpha_{2,\mathrm{sat}} = \mathrm{clip}(\alpha_2, -\delta_{\max}, \delta_{\max})
 $$
 
 $z_\delta = \delta - \alpha_2^f$, where $\alpha_2^f$ tracks $\alpha_{2,\mathrm{sat}}$ with time constant $\tau_f$.
@@ -179,7 +179,7 @@ $z_\delta = \delta - \alpha_2^f$, where $\alpha_2^f$ tracks $\alpha_{2,\mathrm{s
 ### Step 4 — Nozzle command $\delta_{\mathrm{cmd}}$
 
 $$
-\delta_{\mathrm{cmd}} = \delta + \tau_\delta\!\left(\dot\alpha_2^f - g_2 z_\omega - k_\delta z_\delta\right)
+\delta_{\mathrm{cmd}} = \delta + \tau_\delta\left(\dot\alpha_2^f - g_2 z_\omega - k_\delta z_\delta\right)
 $$
 
 ### Stability Summary
