@@ -9,7 +9,7 @@ This repository implements a **planar thrust-vector-controlled (TVC) rocket** wi
 The control objective is to bring the rocket from an arbitrary initial position and attitude to the landing pad at the origin with near-zero velocity and attitude:
 
 $$
-(x,\, y,\, \dot x,\, \dot y,\, \vartheta,\, \dot\vartheta,\, \delta) \;\to\; (0,\, 0,\, 0,\, 0,\, 0,\, 0,\, 0) \quad \text{as } t \to \infty
+(x, y, \dot x, \dot y, \vartheta, \dot\vartheta, \delta) \to (0, 0, 0, 0, 0, 0, 0) \quad \text{as } t \to \infty
 $$
 
 ---
@@ -60,7 +60,7 @@ rocket_hover_energy_based/
 Land a planar TVC rocket at a fixed pad $x_d = 0$ m from an arbitrary initial position, attitude, and velocity. The nozzle deflection is limited to $|\delta| \leq \delta_{\max}$ and throttle to $\sigma \in [\sigma_{\min}, 1]$. The control objective is:
 
 $$
-(x,\, y,\, \dot x,\, \dot y,\, \vartheta,\, \dot\vartheta,\, \delta) \;\to\; (x_d,\, 0,\, 0,\, 0,\, 0,\, 0,\, 0) \quad \text{as } t \to \infty
+(x, y, \dot x, \dot y, \vartheta, \dot\vartheta, \delta) \to (x_d, 0, 0, 0, 0, 0, 0) \quad \text{as } t \to \infty
 $$
 
 ### Method
@@ -159,19 +159,19 @@ A_x = -k_{px}e_x - k_{dx}\dot x, \qquad A_y = -k_{py}e_y - k_{dy}\dot y
 $$
 
 $$
-\sigma = \mathrm{clip}\!\left(\frac{m\sqrt{A_x^2+(A_y+g)^2}}{F_{\max}},\, \sigma_{\min},\, 1\right), \qquad \vartheta^* = \mathrm{atan2}(A_x,\, A_y+g)
+\sigma = \mathrm{clip}\!\left(\frac{m\sqrt{A_x^2+(A_y+g)^2}}{F_{\max}}, \sigma_{\min}, 1\right), \qquad \vartheta^* = \mathrm{atan2}(A_x, A_y+g)
 $$
 
 ### Step 2 — Desired angular rate $\alpha_1$
 
 $$
-z_\vartheta = \vartheta - \vartheta^*, \qquad \alpha_1 = \dot\vartheta^* - k_\vartheta z_\vartheta, \qquad z_\omega = \dot\vartheta - \alpha_1
+z_\vartheta = \vartheta - \vartheta^{\ast}, \qquad \alpha_1 = \dot\vartheta^{\ast} - k_\vartheta z_\vartheta, \qquad z_\omega = \dot\vartheta - \alpha_1
 $$
 
 ### Step 3 — Desired nozzle angle $\alpha_2$
 
 $$
-\alpha_2 = \frac{1}{g_2}\!\left(-k_\omega z_\omega - z_\vartheta - f_2 + \dot\alpha_1\right), \qquad \alpha_{2,\mathrm{sat}} = \mathrm{clip}(\alpha_2,\,-\delta_{\max},\,\delta_{\max})
+\alpha_2 = \frac{1}{g_2}\!\left(-k_\omega z_\omega - z_\vartheta - f_2 + \dot\alpha_1\right), \qquad \alpha_{2,\mathrm{sat}} = \mathrm{clip}(\alpha_2, -\delta_{\max}, \delta_{\max})
 $$
 
 $z_\delta = \delta - \alpha_2^f$, where $\alpha_2^f$ tracks $\alpha_{2,\mathrm{sat}}$ with time constant $\tau_f$.
