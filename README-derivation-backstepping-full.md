@@ -193,7 +193,10 @@ The full objective: $(e_x,\, e_y,\, \dot x,\, \dot y,\, \vartheta,\, \dot\varthe
 The full-backstepping Lyapunov function is built up one term at a time — one $\tfrac{1}{2}z_i^2$ per step — until the entire state is covered:
 
 $$
-\boxed{V = \underbrace{\frac{1}{2}k_{px}e_x^2 + \frac{1}{2}\dot x^2 + \frac{1}{2}k_{py}e_y^2 + \frac{1}{2}\dot y^2}_{V_{\mathrm{pos}}} + \underbrace{\frac{1}{2}z_\vartheta^2}_{\text{Step 2}} + \underbrace{\frac{1}{2}z_\omega^2}_{\text{Step 3}} + \underbrace{\frac{1}{2}z_\delta^2}_{\text{Step 4}}} \tag{V}
+\begin{aligned}
+V = \underbrace{\tfrac{1}{2}k_{px}e_x^2 + \tfrac{1}{2}\dot x^2 + \tfrac{1}{2}k_{py}e_y^2 + \tfrac{1}{2}\dot y^2}_{V_{\mathrm{pos}}} + \underbrace{\tfrac{1}{2}z_\vartheta^2}_{\text{Step 2}} + \underbrace{\tfrac{1}{2}z_\omega^2}_{\text{Step 3}} + \underbrace{\tfrac{1}{2}z_\delta^2}_{\text{Step 4}}
+\end{aligned}
+\tag{V}
 $$
 
 where the backstepping errors are defined sequentially:
@@ -405,7 +408,10 @@ Two residual terms are passed to Step 4:
 **Augment the Lyapunov function:**
 
 $$
-\boxed{V = V_3 + \frac{1}{2}z_\delta^2 = \frac{1}{2}k_{px}e_x^2 + \frac{1}{2}\dot x^2 + \frac{1}{2}k_{py}e_y^2 + \frac{1}{2}\dot y^2 + \frac{1}{2}z_\vartheta^2 + \frac{1}{2}z_\omega^2 + \frac{1}{2}z_\delta^2} \tag{V4}
+\begin{aligned}
+V = V_3 + \tfrac{1}{2}z_\delta^2 = \tfrac{1}{2}k_{px}e_x^2 + \tfrac{1}{2}\dot x^2 + \tfrac{1}{2}k_{py}e_y^2 + \tfrac{1}{2}\dot y^2 + \tfrac{1}{2}z_\vartheta^2 + \tfrac{1}{2}z_\omega^2 + \tfrac{1}{2}z_\delta^2
+\end{aligned}
+\tag{V4}
 $$
 
 **Compute $\dot z_\delta$:**
@@ -448,7 +454,7 @@ The term $-Q = -(F/m)(\dot x\cos\vartheta - \dot y\sin\vartheta)$ in (CL) feeds 
 **$\dot V$ after substituting (CL):**
 
 $$
-\dot V = -k_{dx}\dot x^2 - k_{dy}\dot y^2 - k_\vartheta z_\vartheta^2 - k_\omega z_\omega^2 - k_\delta z_\delta^2 + \alpha_2\cdot Q + \text{(aero damping)} \tag{★}
+\dot V = -k_{dx}\dot x^2 - k_{dy}\dot y^2 - k_\vartheta z_\vartheta^2 - k_\omega z_\omega^2 - k_\delta z_\delta^2 + \alpha_2\cdot Q + \text{(aero damping)} \tag{ISS1}
 $$
 
 The $\alpha_2\cdot Q$ residual is discussed in Section 10.
@@ -459,7 +465,7 @@ The $\alpha_2\cdot Q$ residual is discussed in Section 10.
 
 ### 10.1 Handling the $\alpha_2 \cdot Q$ Residual
 
-Before proceeding to the proof, we characterise the single term in (★) that does not have a definite sign.
+Before proceeding to the proof, we characterise the single term in (ISS1) that does not have a definite sign.
 
 The coupling $Q = (F/m)(\dot x\cos\vartheta - \dot y\sin\vartheta)$ satisfies $|Q| \leq (F/m)\sqrt{\dot x^2 + \dot y^2}$. Applying Young's inequality with parameter $\epsilon > 0$:
 
@@ -473,14 +479,14 @@ $$
 \epsilon \geq \frac{(F/m)^2}{2\min(k_{dx}, k_{dy})} \tag{C-eps}
 $$
 
-the $Q^2$ residual is absorbed by the velocity damping terms, and (★) becomes:
+the $Q^2$ residual is absorbed by the velocity damping terms, and (ISS1) becomes:
 
 $$
 \begin{aligned}
 \dot V \leq &-\left(k_{dx} - \frac{(F/m)^2}{2\epsilon}\right)\dot x^2 - \left(k_{dy} - \frac{(F/m)^2}{2\epsilon}\right)\dot y^2 \\
 &- k_\vartheta z_\vartheta^2 - k_\omega z_\omega^2 - k_\delta z_\delta^2 + \frac{\epsilon}{2}\alpha_2^2
 \end{aligned}
-\tag{★★}
+\tag{ISS2}
 $$
 
 Define $k_{dx}' = k_{dx} - (F/m)^2/(2\epsilon) > 0$ and $k_{dy}' = k_{dy} - (F/m)^2/(2\epsilon) > 0$ (both positive by (C-eps)). The remaining term $\tfrac{\epsilon}{2}\alpha_2^2$ is positive but vanishes at equilibrium since $\alpha_2 \to 0$ when $z_\omega, z_\vartheta, f_2 \to 0$ in (VC2). Its treatment is deferred to Section 10.2.
@@ -510,13 +516,13 @@ $$
 \frac{\epsilon}{2}\alpha_2^2 \leq \frac{\epsilon}{2} C_{\alpha_2}^2 \triangleq \mu
 $$
 
-Substituting into (★★):
+Substituting into (ISS2):
 
 $$
 \begin{aligned}
 \dot V \leq{} &-k_{dx}'\,\dot x^2 - k_{dy}'\,\dot y^2 - k_\vartheta z_\vartheta^2 - k_\omega z_\omega^2 - k_\delta z_\delta^2 + \mu
 \end{aligned}
-\tag{★★★}
+\tag{ISS3}
 $$
 
 This means $\dot V < 0$ whenever $V$ is large enough that the negative terms dominate $\mu$. By standard arguments (see Khalil, Theorem 4.18), all signals are **uniformly ultimately bounded**: they converge to and remain within the compact set:
@@ -559,7 +565,7 @@ In short: the controller is practically stable throughout, and asymptotically co
 
 We show the argument for $\dot x$; the others follow identically.
 
-*Step 1 — Integrability.* With $\mu = 0$, (★★★) gives $\dot V \leq -k_{dx}'\,\dot x^2$. Integrating from $0$ to $T$:
+*Step 1 — Integrability.* With $\mu = 0$, (ISS3) gives $\dot V \leq -k_{dx}'\,\dot x^2$. Integrating from $0$ to $T$:
 
 $$
 \int_0^T k_{dx}'\,\dot x^2(\tau)\,d\tau \leq V(0) - V(T) \leq V(0) < \infty
@@ -575,7 +581,7 @@ $$
 \dot x^2(t) \to 0 \implies \dot x(t) \to 0 \quad \text{as } t \to \infty \qquad \square
 $$
 
-The same argument applies to $\dot y$, $z_\vartheta$, $z_\omega$, and $z_\delta$ using the corresponding negative-definite terms in (★★★).
+The same argument applies to $\dot y$, $z_\vartheta$, $z_\omega$, and $z_\delta$ using the corresponding negative-definite terms in (ISS3).
 
 ### 10.4 Convergence of Position Errors — LaSalle's Invariance Principle
 
@@ -705,7 +711,7 @@ The term $d_\delta/\tau_\delta$ is bounded with $|d_\delta/\tau_\delta| \leq 2\d
 
 #### 10.5.4 Lyapunov Derivative Under Both Disturbances
 
-Starting from (★) and substituting the perturbed dynamics, the $z_\omega$ and $z_\delta$ contributions become:
+Starting from (ISS1) and substituting the perturbed dynamics, the $z_\omega$ and $z_\delta$ contributions become:
 
 $$
 z_\omega\,\dot z_\omega = -k_\omega z_\omega^2 - z_\vartheta z_\omega + g_2 z_\omega z_\delta + g_2\,d_\omega\,z_\omega
@@ -732,7 +738,7 @@ $$
 provided $k_\omega > 1/k_\vartheta + 1$ (to keep the net $z_\omega^2$ coefficient positive after subtracting $1/k_\vartheta$). Collecting all terms:
 
 $$
-\dot V \leq -k_{dx}''\,\dot x^2 - k_{dy}''\,\dot y^2 - \frac{k_\vartheta}{2}z_\vartheta^2 - \frac{k_\omega}{2}z_\omega^2 - \frac{k_\delta}{4}z_\delta^2 + D' \tag{★ISS}
+\dot V \leq -k_{dx}''\,\dot x^2 - k_{dy}''\,\dot y^2 - \frac{k_\vartheta}{2}z_\vartheta^2 - \frac{k_\omega}{2}z_\omega^2 - \frac{k_\delta}{4}z_\delta^2 + D' \tag{ISS4}
 $$
 
 where $k_{dx}''$, $k_{dy}''$ are the further-reduced damping coefficients after absorbing the $Q z_\delta$ velocity residual.
@@ -767,13 +773,13 @@ $$
 c = \min\!\left(k_{dx}'',\, k_{dy}'',\, \frac{k_\vartheta}{2},\, \frac{k_\omega}{4},\, \frac{k_\delta}{8}\right), \qquad D = D'
 $$
 
-From (★ISS), $\dot V \leq 0$ whenever each squared error term exceeds $D/(\text{its coefficient})$. By Khalil Theorem 4.18, all signals are **uniformly ultimately bounded** and converge to:
+From (ISS4), $\dot V \leq 0$ whenever each squared error term exceeds $D/(\text{its coefficient})$. By Khalil Theorem 4.18, all signals are **uniformly ultimately bounded** and converge to:
 
 $$
 \mathcal{B} = \Bigl\{ V \leq \tfrac{D}{c} \Bigr\}
 $$
 
-Since $V$ does not contain position errors $e_x, e_y$ with coefficients that appear in the negative-definite part of (★ISS), we cannot write $\dot V \leq -cV + D$ directly — the correct statement is that (★ISS) is negative outside $\mathcal{B}$. The individual state bounds follow from $V(t) \leq V_{\max} = \max(V(0), D/c)$.
+Since $V$ does not contain position errors $e_x, e_y$ with coefficients that appear in the negative-definite part of (ISS4), we cannot write $\dot V \leq -cV + D$ directly — the correct statement is that (ISS4) is negative outside $\mathcal{B}$. The individual state bounds follow from $V(t) \leq V_{\max} = \max(V(0), D/c)$.
 
 **Theorem (UUB under saturation).** Under Assumptions A1–A7, gain condition (C-eps) (extended to cover the $Qz_\delta$ term), and $k_\omega > 1/k_\vartheta + 1$, the closed-loop system with saturated controls is **uniformly ultimately bounded**: all states enter and remain in $\mathcal{B}$. The residual bound on attitude errors is:
 
