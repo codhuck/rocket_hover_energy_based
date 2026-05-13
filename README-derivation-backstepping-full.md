@@ -513,13 +513,16 @@ $$
 Substituting into (★★):
 
 $$
-\dot V \leq -k_{dx}'\,\dot x^2 - k_{dy}'\,\dot y^2 - k_\vartheta z_\vartheta^2 - k_\omega z_\omega^2 - k_\delta z_\delta^2 + \mu \tag{★★★}
+\begin{aligned}
+\dot V \leq{} &-k_{dx}'\,\dot x^2 - k_{dy}'\,\dot y^2 - k_\vartheta z_\vartheta^2 - k_\omega z_\omega^2 - k_\delta z_\delta^2 + \mu
+\end{aligned}
+\tag{★★★}
 $$
 
 This means $\dot V < 0$ whenever $V$ is large enough that the negative terms dominate $\mu$. By standard arguments (see Khalil, Theorem 4.18), all signals are **uniformly ultimately bounded**: they converge to and remain within the compact set:
 
 $$
-\Omega = \left\{ V \leq \frac{\mu}{c} \right\}, \qquad c = \min(k_{dx}', k_{dy}', k_\vartheta, k_\omega, k_\delta)
+\Omega = \Bigl\{ V \leq \tfrac{\mu}{c} \Bigr\}, \qquad c = \min(k_{dx}',\, k_{dy}',\, k_\vartheta,\, k_\omega,\, k_\delta)
 $$
 
 **Theorem (UUB).** Under the control law (CL), virtual controls (VC1)–(VC2), and Assumptions A1–A7, if gains satisfy (C-eps) strictly, then all signals $(e_x, \dot x, e_y, \dot y, z_\vartheta, z_\omega, z_\delta)$ are **uniformly ultimately bounded**: they enter and remain in the compact set $\Omega = \{V \leq \mu/c\}$ in finite time. The transient bound is:
@@ -583,7 +586,7 @@ The same argument applies to $\dot y$, $z_\vartheta$, $z_\omega$, and $z_\delta$
 **Define the limiting set:**
 
 $$
-\mathcal{S} = \left\{(e_x,\, \dot x,\, e_y,\, \dot y,\, z_\vartheta,\, z_\omega,\, z_\delta) \;:\; \dot x = \dot y = z_\vartheta = z_\omega = z_\delta = 0\right\}
+\mathcal{S} = \Bigl\{(e_x,\, \dot x,\, e_y,\, \dot y,\, z_\vartheta,\, z_\omega,\, z_\delta) \;:\; \dot x = \dot y = z_\vartheta = z_\omega = z_\delta = 0\Bigr\}
 $$
 
 Under the idealised assumption $\mu = 0$, Section 10.3 shows every trajectory enters $\mathcal{S}$ asymptotically. We now show that any trajectory remaining in $\mathcal{S}$ for all time must satisfy $e_x = e_y = 0$.
@@ -767,7 +770,7 @@ $$
 From (★ISS), $\dot V \leq 0$ whenever each squared error term exceeds $D/(\text{its coefficient})$. By Khalil Theorem 4.18, all signals are **uniformly ultimately bounded** and converge to:
 
 $$
-\mathcal{B} = \left\{ V \leq \frac{D}{c} \right\}
+\mathcal{B} = \Bigl\{ V \leq \tfrac{D}{c} \Bigr\}
 $$
 
 Since $V$ does not contain position errors $e_x, e_y$ with coefficients that appear in the negative-definite part of (★ISS), we cannot write $\dot V \leq -cV + D$ directly — the correct statement is that (★ISS) is negative outside $\mathcal{B}$. The individual state bounds follow from $V(t) \leq V_{\max} = \max(V(0), D/c)$.
