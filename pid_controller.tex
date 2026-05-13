@@ -1,0 +1,369 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{amsmath,amssymb}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{parskip}
+\usepackage{microtype}
+
+\geometry{margin=2.5cm}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black,
+  citecolor=blue!60!black
+}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{gray!10},
+  frame=single,
+  framerule=0pt,
+  breaklines=true
+}
+
+\graphicspath{
+  {outputs/pid_cascade/figures/}
+  {outputs/backstepping/figures/}
+}
+
+\newcommand{\clip}{\operatorname{clip}}
+
+\title{\textbf{Cascaded PID Landing Controller}\\
+\large Description and Comparison with Backstepping}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% =============================================================================
+\section{Overview}
+% =============================================================================
+
+This document describes the cascaded PID controller implemented in \texttt{src/pid\_controller.py} as a \textbf{baseline comparison} against the full-system backstepping controller. Both controllers share the same rocket model, simulation infrastructure, and initial conditions, making the comparison direct and fair.
+
+The key question this comparison answers:
+
+\begin{quote}
+\textit{What does the backstepping controller gain by knowing the physics of the system, compared to a PID that only sees errors?}
+\end{quote}
+
+% =============================================================================
+\section{Architecture}
+% =============================================================================
+
+The controller consists of \textbf{three nested feedback loops}, each running at the same rate (continuous-time ODE integration):
+
+\begin{lstlisting}
+Position error (e_x, e_y)
+        |
+        v  Loop 1 - Outer (position -> thrust angle + throttle)
+   theta_des, sigma
+        |
+        v  Loop 2 - Middle (angle error -> desired angular rate)
+     omega_des
+        |
+        v  Loop 3 - Inner (rate error -> nozzle command)
+     delta_cmd
+        |
+        v  Nozzle actuator (first-order, tau_delta = 0.05 s)
+      delta(t)
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\subsection{Loop 1 --- Position (PID)}
+% -----------------------------------------------------------------------------
+
+Desired accelerations are computed from position and velocity errors with optional integral terms:
+
+\begin{align}
+  A_x &= -\bigl(k_{px}\,e_x + k_{dx}\,\dot{x} + k_{ix}\,I_x\bigr) \\
+  A_y &= -\bigl(k_{py}\,e_y + k_{dy}\,\dot{y} + k_{iy}\,I_y\bigr)
+\end{align}
+
+where $e_x = x - x_d$, $e_y = y$, and the integrals $I_x = \int e_x\,dt$, $I_y = \int e_y\,dt$ are propagated as ODE states.
+
+The desired pitch angle and throttle are obtained by \textbf{inverting thrust kinematics} (same as the backstepping outer loop):
+
+\begin{align}
+  \sigma &= \clip\!\left(\frac{m\,\sqrt{A_x^2 + (A_y+g)^2}}{F_{\max}},\;\sigma_{\min},\;1\right) \\[4pt]
+  \theta^* &= \operatorname{atan2}(A_x,\;A_y + g)
+\end{align}
+
+A tilt limit of $\phi_{\lim} = 30^{\circ}$ is enforced by clamping $A_x$ before this inversion.
+
+\textbf{Critical damping condition} (prevents altitude oscillation):
+\[
+  k_{dy} \geq 2\sqrt{k_{py}}, \qquad k_{dx} \geq 2\sqrt{k_{px}}
+\]
+
+\begin{quote}
+\textbf{Warning:} setting $k_{dy} = 0$ removes all velocity feedback from the altitude loop. The rocket will oscillate indefinitely --- the pure-P altitude controller has two poles on the imaginary axis.
+\end{quote}
+
+% -----------------------------------------------------------------------------
+\subsection{Loop 2 --- Attitude (PI)}
+% -----------------------------------------------------------------------------
+
+A proportional-integral controller on pitch error:
+
+\begin{equation}
+  \omega_{\mathrm{des}} = \clip\!\Bigl(-k_\varphi\,e_\varphi - k_{i\varphi}\,I_\varphi,\;{-\omega_{\max}},\;\omega_{\max}\Bigr)
+\end{equation}
+
+where $e_\varphi = \varphi - \theta^*$ and $I_\varphi = \int e_\varphi\,dt$ is the third ODE integral state.
+
+The \textbf{derivative term is implicit}: $\omega = \dot\varphi$ is the physical derivative of pitch and is consumed by the inner rate loop. A dedicated $k_d$ term would double-count it.
+
+Anti-windup clamping prevents integral saturation during large initial transients:
+\[
+  I_\varphi \leftarrow \clip(I_\varphi,\;{-I_{\varphi,\max}},\;I_{\varphi,\max})
+\]
+
+% -----------------------------------------------------------------------------
+\subsection{Loop 3 --- Angular Rate and Nozzle (PD)}
+% -----------------------------------------------------------------------------
+
+The desired nozzle angle is derived with correct physical scaling via the nozzle-to-torque gain $g_2 = F\,l_{cp}/J$:
+
+\begin{equation}
+  \alpha_{2} = \frac{1}{g_2}\bigl(-k_\omega\,e_\omega - e_\varphi\bigr), \qquad e_\omega = \omega - \omega_{\mathrm{des}}
+\end{equation}
+
+The final nozzle command drives the first-order actuator:
+
+\begin{equation}
+  \delta_{\mathrm{cmd}} = \delta + \tau_\delta\bigl(-g_2\,e_\omega - k_\delta\,z_\delta\bigr)
+\end{equation}
+
+where $z_\delta = \delta - \alpha_2$ is the nozzle tracking error and $k_\delta$ provides actuator damping.
+
+% =============================================================================
+\section{State Vector Reuse}
+% =============================================================================
+
+The PID controller \textbf{reuses the 10-element ODE state} from the backstepping formulation without adding new states:
+
+\begin{center}
+\begin{tabular}{cllll}
+\toprule
+Slot & Index & Backstepping meaning & PID meaning \\
+\midrule
+7 & \texttt{IDX\_ALPHA2F} & Command filter state $\alpha_2^f$ & $I_\varphi = \int e_\varphi\,dt$ \\
+8 & \texttt{IDX\_TS\_DOT}  & Filtered $\dot\theta^*$           & $I_x = \int e_x\,dt$ \\
+9 & \texttt{IDX\_A1\_DOT}  & Filtered $\dot\alpha_1$           & $I_y = \int e_y\,dt$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =============================================================================
+\section{What Is Missing vs.\ Backstepping}
+% =============================================================================
+
+The PID cascade has the same loop structure as the backstepping controller but omits all \textbf{physics-based feedforward terms}:
+
+\begin{center}
+\begin{tabular}{lp{2.8cm}p{2.2cm}p{5cm}}
+\toprule
+Term & Backstepping & PID cascade & Effect of absence \\
+\midrule
+$\dot\theta^*$ in $\omega_{\mathrm{des}}$ & \checkmark & $\times$ & Attitude loop lags behind a moving target angle \\
+$f_2 = C_{m\alpha}\alpha q_\infty S_m l/J$ in $\alpha_2$ & \checkmark & $\times$ & Aerodynamic pitch moment acts as uncompensated disturbance \\
+$\dot\alpha_1$ in $\alpha_2$ & \checkmark & $\times$ & No feedforward of desired rate-of-rate \\
+$Q = (F/m)(\dot x\cos\varphi - \dot y\sin\varphi)$ in $\delta_{\mathrm{cmd}}$ & \checkmark & $\times$ & Velocity--nozzle coupling uncompensated \\
+Lyapunov stability guarantee & \checkmark & $\times$ & Stability depends on gain selection, not structure \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =============================================================================
+\section{Tuning Guide}
+% =============================================================================
+
+Tune \textbf{outer to inner} --- never adjust inner loops before the outer loop is stable.
+
+\subsection{Step 1 --- Outer Loop (Position)}
+
+Start at the backstepping values and verify the critical damping condition:
+
+\begin{lstlisting}[language=Python]
+k_py: 2.0    k_dy: 5.0    # k_dy >= 2*sqrt(2.0) = 2.83  OK
+k_px: 0.3    k_dx: 1.5    # k_dx >= 2*sqrt(0.3) = 1.09  OK
+k_ix: 0.0    k_iy: 0.0    # start with I = 0
+\end{lstlisting}
+
+\begin{itemize}
+  \item \textbf{Increase \texttt{k\_py}/\texttt{k\_dy}} for faster altitude braking (keep the ratio $k_{dy}/\sqrt{k_{py}} \geq 2$).
+  \item \textbf{Increase \texttt{k\_px}/\texttt{k\_dx}} to reduce horizontal position error at touchdown.
+  \item \textbf{Enable \texttt{k\_iy}} only if the rocket consistently overshoots $y=0$ --- integral windup is a risk.
+\end{itemize}
+
+\subsection{Step 2 --- Middle Loop (Attitude)}
+
+\begin{lstlisting}[language=Python]
+k_phi: 6-12    omega_des_max: 1.5
+k_i_phi: 0.0   i_phi_max: 1.0
+\end{lstlisting}
+
+\begin{itemize}
+  \item Without the $\dot\theta^*$ feedforward the attitude loop always lags --- increase \texttt{k\_phi} beyond the backstepping value to compensate.
+  \item \texttt{omega\_des\_max} prevents the rate demand from saturating the inner loop during large angle excursions.
+  \item Enable \texttt{k\_i\_phi} only after P-tuning is complete; use small values (0.01--0.1) and keep \texttt{i\_phi\_max} tight.
+\end{itemize}
+
+\subsection{Step 3 --- Inner Loop (Rate / Nozzle)}
+
+\begin{lstlisting}[language=Python]
+k_omega: 6-10    k_delta: 15-25
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{k\_omega} controls how aggressively rate errors are corrected via nozzle deflection.
+  \item \texttt{k\_delta} damps nozzle oscillation --- increase if \texttt{delta(t)} chatters on the plot.
+  \item Both gains interact with the nozzle actuator time constant \texttt{tau\_delta = 0.05\,s}.
+\end{itemize}
+
+\subsection{Diagnostic: Reading the Plots}
+
+\begin{center}
+\begin{tabular}{llp{7cm}}
+\toprule
+Signal & Plot & What to watch \\
+\midrule
+\texttt{delta(t)} vs \texttt{alpha2f}     & attitude\_and\_gimbal   & Should converge at steady state; persistent gap means inner loop too slow \\
+\texttt{z\_phi}, \texttt{z\_omega}, \texttt{z\_delta} & backstepping\_errors & All should decay; sustained oscillation $=$ gain too high \\
+\texttt{lyap\_V}                          & lyapunov\_and\_throttle & Should decrease monotonically; bumps indicate saturation events \\
+\texttt{phi(t)} vs \texttt{phi*(t)}       & attitude\_and\_gimbal   & PID lag is visible here --- gap reduces with higher \texttt{k\_phi} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =============================================================================
+\section{Results}
+% =============================================================================
+
+\subsection{Comparison with Identical Initial Conditions}
+
+\[
+  x_0 = 50\ \text{m},\quad y_0 = 200\ \text{m},\quad \dot x_0 = 10\ \text{m/s},\quad \dot y_0 = -20\ \text{m/s},\quad \varphi_0 = 30^{\circ}
+\]
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+Metric & Backstepping & PID cascade \\
+\midrule
+Landing time          & 24.4 s        & $\sim$11--13 s \\
+Touchdown speed       & \textbf{0.13 m/s} & $\sim$9 m/s \\
+Max pitch             & $35^{\circ}$  & $30^{\circ}$--$70^{\circ}$ \\
+$x$ error at touchdown & 0.1 m       & 5--15 m \\
+Stability guarantee   & Lyapunov UUB & Gain-dependent \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Why the PID Lands Faster but Harder}
+
+The PID chooses more aggressive position gains to compensate for the missing attitude feedforward --- it must brake harder to avoid overshooting. This produces a faster descent but a larger residual velocity at touchdown.
+
+The backstepping controller ``knows'' the desired angle is changing ($\dot\theta^*$) and pre-rotates the rocket before the position error demands it, resulting in a much smoother trajectory and near-zero touchdown speed.
+
+\subsection{Trajectory Comparison}
+
+\begin{figure}[h]
+  \centering
+  \begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{planar_trajectory.png}
+    \caption{PID cascade: planar trajectory.}
+    \label{fig:pid_traj}
+  \end{minipage}\hfill
+  \begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{rocket_visualization_preview.png}
+    \caption{PID cascade: rocket visualization.}
+    \label{fig:pid_vis}
+  \end{minipage}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.85\textwidth]{position_velocity.png}
+  \caption{PID cascade: position and velocity time histories.}
+  \label{fig:pid_posvel}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.85\textwidth]{attitude_and_gimbal.png}
+  \caption{PID cascade: pitch angle $\varphi$ vs desired $\theta^*$, angular rate, and nozzle deflection $\delta$. The PID lag between $\varphi$ and $\theta^*$ is visible.}
+  \label{fig:pid_attitude}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.85\textwidth]{backstepping_errors.png}
+  \caption{PID cascade: tracking errors $z_\varphi$, $z_\omega$, $z_\delta$.}
+  \label{fig:pid_errors}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.85\textwidth]{lyapunov_and_throttle.png}
+  \caption{PID cascade: Lyapunov function $V$ and throttle $\sigma$.}
+  \label{fig:pid_lyap}
+\end{figure}
+
+% =============================================================================
+\section{Running}
+% =============================================================================
+
+\begin{lstlisting}[language=bash]
+# PID cascade
+python3 -m src.main \
+    --config configs/pid_cascade.yaml \
+    --output-root outputs/pid_cascade \
+    --animate
+
+# Backstepping (reference)
+python3 -m src.main \
+    --config configs/backstepping.yaml \
+    --output-root outputs/backstepping \
+    --animate
+\end{lstlisting}
+
+Output structure:
+
+\begin{lstlisting}
+outputs/pid_cascade/
++-- figures/
+|   +-- position_velocity.png
+|   +-- attitude_and_gimbal.png
+|   +-- backstepping_errors.png   # tracking errors z_phi, z_omega, z_delta
+|   +-- lyapunov_and_throttle.png
+|   +-- coupling_terms.png        # P=0, Q=0 for PID (no coupling compensation)
+|   +-- planar_trajectory.png
+|   +-- summary.json
++-- animations/
+    +-- pid_cascade_landing.gif
+\end{lstlisting}
+
+% =============================================================================
+\section*{References}
+% =============================================================================
+
+\begin{enumerate}
+  \item \AA str\"{o}m, K.\,J. \& H\"{a}gglund, T. (2006). \textit{Advanced PID Control}. ISA Press. --- Cascade PID structure; anti-windup; critical damping conditions.
+  \item Khalil, H.\,K. (2002). \textit{Nonlinear Systems} (3rd ed.). Prentice Hall. --- Stability of cascade systems; comparison with Lyapunov-based designs.
+  \item \texttt{README-derivation-backstepping-full.md} --- full derivation of the backstepping controller that this PID is compared against.
+\end{enumerate}
+
+\end{document}
