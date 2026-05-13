@@ -57,9 +57,15 @@ rocket_hover_energy_based/
 
 ## 1. Problem Definition
 
+Land a planar TVC rocket at a fixed pad $x_d = 0$ m from an arbitrary initial position, attitude, and velocity. The nozzle deflection is limited to $|\delta| \leq \delta_{\max}$ and throttle to $\sigma \in [\sigma_{\min}, 1]$. The control objective is:
+
+$$
+(x,\, y,\, \dot x,\, \dot y,\, \vartheta,\, \dot\vartheta,\, \delta) \;\to\; (x_d,\, 0,\, 0,\, 0,\, 0,\, 0,\, 0) \quad \text{as } t \to \infty
+$$
+
 ### Method
 
-**Full-system backstepping** with a composite Lyapunov function covering all seven states simultaneously:
+**Full-system backstepping** with a composite Lyapunov function covering all seven plant states simultaneously:
 
 $$
 V = \tfrac{1}{2}k_{px}e_x^2 + \tfrac{1}{2}\dot x^2 + \tfrac{1}{2}k_{py}e_y^2 + \tfrac{1}{2}\dot y^2 + \tfrac{1}{2}z_\vartheta^2 + \tfrac{1}{2}z_\omega^2 + \tfrac{1}{2}z_\delta^2
@@ -74,7 +80,7 @@ Four sequential backstepping steps produce virtual controls $\vartheta^*$, $\alp
 3. **Low-speed regime**: $V \leq 100$ m/s, linear aerodynamic coefficients apply.
 4. **Small nozzle deflection**: $|\delta| \leq 0.262$ rad, enabling $\sin(\vartheta+\delta) \approx \sin\vartheta + \delta\cos\vartheta$.
 5. **First-order nozzle actuator**: $\tau_\delta \dot\delta = -\delta + \delta_{\mathrm{cmd}}$.
-6. **Full state measurement**: all 10 ODE states measurable.
+6. **Full state measurement**: all 7 plant states $(x, y, \dot x, \dot y, \vartheta, \dot\vartheta, \delta)$ measurable without noise.
 
 ---
 
@@ -88,13 +94,13 @@ $$
 s = [x,\ y,\ \dot x,\ \dot y,\ \vartheta,\ \dot\vartheta,\ \delta]^T \in \mathbb{R}^7
 $$
 
-The **ODE state** integrated by the simulator is extended to 10 by three internal controller states:
+The **ODE state** integrated by the simulator is extended to 10 by three internal controller states required for numerical implementation:
 
 $$
-q = [x,\ y,\ \dot x,\ \dot y,\ \vartheta,\ \dot\vartheta,\ \delta,\ \underbrace{\alpha_2^f}_{\text{cmd filter}},\ \underbrace{\dot\vartheta^*_{\mathrm{filt}}}_{\text{deriv filter}},\ \underbrace{\dot\alpha_{1,\mathrm{filt}}}_{\text{deriv filter}}]^T \in \mathbb{R}^{10}
+q = [x,\ y,\ \dot x,\ \dot y,\ \vartheta,\ \dot\vartheta,\ \delta,\ \alpha_2^f,\ \dot\vartheta^*,\ \dot\alpha_1]^T \in \mathbb{R}^{10}
 $$
 
-The three extra states are first-order filters that avoid algebraic differentiation inside the ODE; they do not appear in the stability proof. Control inputs: $\sigma \in [\sigma_{\min}, 1]$ (throttle) and $\delta_{\mathrm{cmd}} \in [-\delta_{\max,\mathrm{cmd}}, \delta_{\max,\mathrm{cmd}}]$.
+Control inputs: $\sigma \in [\sigma_{\min}, 1]$ (throttle) and $\delta_{\mathrm{cmd}} \in [-\delta_{\max,\mathrm{cmd}}, \delta_{\max,\mathrm{cmd}}]$.
 
 ![Body-fixed coordinate frame](figures/BF_Sys.png)
 
@@ -129,9 +135,6 @@ $$
 | $e_x = x - x_d$ | Horizontal position error | m |
 | $e_y = y$ | Altitude error | m |
 | $\vartheta$ | Pitch angle from vertical, positive rightward | rad |
-| $z_\vartheta = \vartheta - \vartheta^*$ | Pitch error | rad |
-| $z_\omega = \dot\vartheta - \alpha_1$ | Rate error | rad/s |
-| $z_\delta = \delta - \alpha_2^f$ | Nozzle error | rad |
 | $g_2 = F l_{cp}/J$ | Rotational control gain | s⁻² |
 | $f_2 = C_{m\alpha}\alpha q_\infty S_m l/J$ | Aerodynamic pitching moment / $J$ | rad/s² |
 
@@ -140,6 +143,14 @@ $$
 ## 3. Control Law
 
 For full derivations and formal proofs see `backstepping_derivation.tex`.
+
+### Backstepping Error Coordinates
+
+| Symbol | Definition | Meaning | Units |
+|--------|-----------|---------|-------|
+| $z_\vartheta$ | $\vartheta - \vartheta^*$ | Pitch tracking error | rad |
+| $z_\omega$ | $\dot\vartheta - \alpha_1$ | Angular rate tracking error | rad/s |
+| $z_\delta$ | $\delta - \alpha_2^f$ | Nozzle tracking error | rad |
 
 ### Step 1 — Desired pitch $\vartheta^*$ and throttle $\sigma$
 
@@ -163,7 +174,7 @@ $$
 \alpha_2 = \frac{1}{g_2}\!\left(-k_\omega z_\omega - z_\vartheta - f_2 + \dot\alpha_1\right), \qquad \alpha_{2,\mathrm{sat}} = \mathrm{clip}(\alpha_2,\,-\delta_{\max},\,\delta_{\max})
 $$
 
-Command filter: $\tau_f\,\dot\alpha_2^f = \alpha_{2,\mathrm{sat}} - \alpha_2^f$, then $z_\delta = \delta - \alpha_2^f$.
+$z_\delta = \delta - \alpha_2^f$, where $\alpha_2^f$ tracks $\alpha_{2,\mathrm{sat}}$ with time constant $\tau_f$.
 
 ### Step 4 — Nozzle command $\delta_{\mathrm{cmd}}$
 
@@ -219,7 +230,6 @@ $$
 | $k_\omega$ | 5.0 | Angular rate error |
 | $k_\delta$ | 15.0 | Nozzle error |
 | $\alpha_{1,\max}$ | 1.5 rad/s | Virtual rate saturation |
-| $\tau_f$ | 0.01 s | Command filter time constant |
 
 ---
 
@@ -239,7 +249,7 @@ Horizontal position $x(t)$ converging to 0, altitude $y(t)$ descending smoothly,
 
 ![Attitude and nozzle](outputs/backstepping/figures/attitude_and_gimbal.png)
 
-Pitch recovering from 30° to 0°. The nozzle tracks the virtual reference $\alpha_2^f$ closely throughout.
+Pitch recovering from 30° to 0°. The nozzle tracks the virtual reference $\alpha_2^f$ closely throughout the manoeuvre.
 
 ### Backstepping Error Coordinates
 
@@ -303,8 +313,8 @@ Both controllers started from identical initial conditions: $x_0 = 50$ m, $y_0 =
 | Final $y$ | **0.30 m** | 2.29 m |
 | Final $\vartheta$ | **−0.03 deg** | 4.66 deg |
 | Final $\dot\vartheta$ | **0.007 deg/s** | −15.16 deg/s |
-| Max $|\vartheta|$ | 35.1 deg | 30.0 deg |
-| Max $|\delta|$ | 15.0 deg | 15.0 deg |
+| Max $\vartheta$ | 35.1 deg | 30.0 deg |
+| Max $\delta$ | 15.0 deg | 15.0 deg |
 | Lyapunov $V$ at end | **0.10** | 40.5 |
 | Stability guarantee | **Lyapunov UUB** | Gain-dependent |
 
