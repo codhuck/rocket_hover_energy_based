@@ -1,0 +1,18 @@
+{
+  "controller_type": "pid_cascade",
+  "final_x": -0.9892698151915136,
+  "final_y": 2.2902763909077866,
+  "final_vx": -8.956420165626499,
+  "final_vy": -0.40089737227949257,
+  "final_phi_deg": 4.663312736370086,
+  "final_omega_deg_s": -15.15668719982729,
+  "final_delta_deg": -4.131722196969689,
+  "final_speed": 8.965387938418594,
+  "max_speed": 26.01695884448205,
+  "max_abs_phi_deg": 29.999999999999996,
+  "max_abs_delta_deg": 14.991497894865677,
+  "lyap_V_initial": 2661.626520999354,
+  "lyap_V_final": 40.545832964989536,
+  "landing_time_s": null,
+  "simulation_time": 30.0
+}

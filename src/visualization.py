@@ -46,6 +46,10 @@ PALETTE = {
 }
 
 
+def _ctrl_label(result: "SimulationResult") -> str:
+    return result.config.get("controller", {}).get("type", "backstepping")
+
+
 def _style_ax(ax):
     ax.set_facecolor(PALETTE['panel'])
     ax.grid(color=PALETTE['grid'], linewidth=0.6, alpha=0.7)
@@ -64,7 +68,7 @@ def body_to_world(pts: np.ndarray, x: float, y: float, theta: float) -> np.ndarr
 
 
 def draw_rocket(ax, x, y, theta, delta, throttle, trail_x, trail_y,
-                vw=5.0, vh=6.5):
+                vw=5.0, vh=6.5, title="Backstepping landing"):
     ax.clear()
     ax.set_facecolor(PALETTE['panel'])
     ax.grid(color=PALETTE['grid'], linewidth=0.6, alpha=0.7)
@@ -77,7 +81,7 @@ def draw_rocket(ax, x, y, theta, delta, throttle, trail_x, trail_y,
     ax.set_aspect('equal', adjustable='box')
     ax.set_xlabel('x [m]', color=PALETTE['label'], fontsize=8)
     ax.set_ylabel('y [m]', color=PALETTE['label'], fontsize=8)
-    ax.set_title('Backstepping landing', color=PALETTE['title'], fontsize=9, pad=6)
+    ax.set_title(title, color=PALETTE['title'], fontsize=9, pad=6)
 
     ax.axhline(0.0, color=PALETTE['ground_line'], lw=1.6, zorder=0)
     ax.fill_between([x - 200, x + 200], -100, 0.0,
@@ -171,7 +175,7 @@ def save_all_figures(result: SimulationResult, output_dir: Path) -> None:
     axes[1, 1].set_xlabel('Time [s]', color=PALETTE['label'])
     axes[1, 1].set_title('Vertical velocity', color=PALETTE['title'], fontsize=9)
 
-    fig.suptitle('Position and velocity — backstepping landing',
+    fig.suptitle(f'Position and velocity — {_ctrl_label(result)} landing',
                  color=PALETTE['title'], fontsize=11)
     fig.tight_layout()
     fig.savefig(output_dir / 'position_velocity.png', dpi=190,
@@ -252,7 +256,7 @@ def save_all_figures(result: SimulationResult, output_dir: Path) -> None:
     axes[2].set_title('Actuator error z_delta', color=PALETTE['title'], fontsize=9)
     axes[2].legend(fontsize=8, facecolor=PALETTE['panel'], labelcolor=PALETTE['label'])
 
-    fig.suptitle('Backstepping error coordinates z_phi, z_omega, z_delta',
+    fig.suptitle(f'Tracking errors z_phi, z_omega, z_delta — {_ctrl_label(result)}',
                  color=PALETTE['title'], fontsize=11)
     fig.tight_layout()
     fig.savefig(output_dir / 'backstepping_errors.png', dpi=190,
@@ -306,7 +310,7 @@ def save_all_figures(result: SimulationResult, output_dir: Path) -> None:
     axes[1].set_title('Nozzle-position coupling Q', color=PALETTE['title'], fontsize=9)
     axes[1].legend(fontsize=8, facecolor=PALETTE['panel'], labelcolor=PALETTE['label'])
 
-    fig.suptitle('Full-backstepping coupling terms (zero in cascade approximation)',
+    fig.suptitle(f'Coupling terms P and Q — {_ctrl_label(result)}',
                  color=PALETTE['title'], fontsize=11)
     fig.tight_layout()
     fig.savefig(output_dir / 'coupling_terms.png', dpi=190,
@@ -355,6 +359,7 @@ def save_preview_figure(result: SimulationResult, output_path: Path) -> None:
         throttle=float(result.controls['sigma'][idx]),
         trail_x=result.state[:idx + 1, IDX_X],
         trail_y=result.state[:idx + 1, IDX_Y],
+        title=f"{_ctrl_label(result)} landing",
     )
     fig.tight_layout()
     fig.savefig(output_path, dpi=190, facecolor=fig.get_facecolor())
@@ -384,6 +389,7 @@ def save_animation(result: SimulationResult, output_path: Path) -> None:
 
     def update(frame_num):
         idx = frames[frame_num]
+        ctrl_lbl = _ctrl_label(result)
         draw_rocket(
             ax,
             x=float(state[idx, IDX_X]),
@@ -393,6 +399,7 @@ def save_animation(result: SimulationResult, output_path: Path) -> None:
             throttle=float(ctl['sigma'][idx]),
             trail_x=state[:idx + 1, IDX_X],
             trail_y=state[:idx + 1, IDX_Y],
+            title=f"{ctrl_lbl} landing",
         )
         info = (
             f"t      = {t[idx]:5.2f} s\n"
@@ -407,7 +414,7 @@ def save_animation(result: SimulationResult, output_path: Path) -> None:
                 color=PALETTE['text'], fontsize=8.5, fontfamily='monospace',
                 bbox=dict(boxstyle='round,pad=0.35', fc=PALETTE['bg'],
                           ec=PALETTE['grid'], alpha=0.90))
-        fig.suptitle('Planar TVC Rocket — Full Backstepping Landing',
+        fig.suptitle(f'Planar TVC Rocket — {ctrl_lbl}',
                      color=PALETTE['text'], fontsize=11)
 
     try:

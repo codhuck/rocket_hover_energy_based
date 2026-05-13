@@ -1,0 +1,78 @@
+# =============================================================================
+# Cascaded PID landing controller
+#
+# Usage:
+#   python -m src.main --config configs/pid_cascade.yaml --output-root outputs/pid_cascade
+# =============================================================================
+
+rocket:
+  g: 9.81
+  rho: 1.225
+  mass: 13000
+  J_const: 318196.65
+  l_cp: 10.5
+  l: 18.0
+  S_mid: 1.1304
+  F_max: 191763.0
+  delta_max_deg: 15.0
+  delta_max_cmd_deg: 15.0
+  sigma_min: 0.45
+  tau_delta: 0.05
+
+  C_x: 0.358
+  C_yn: 3.096
+  C_m_alpha_true: 1.054
+
+initial_state:
+  x: 50.0
+  y: 200.0
+  theta_deg: 30.0
+  vx: 10.0
+  vy: -20.0
+  omega_deg_s: 0.0
+  delta_deg: 0.0
+
+experiment:
+  t_final: 30.0
+  sample_count: 3001
+  max_step: 0.01
+
+# -----------------------------------------------------------------------------
+# PID Cascade gains
+#
+# Outer loop (position → sigma + theta_des):
+#   k_px / k_dx — horizontal PD  (k_dx >= 2*sqrt(k_px) for critical damping)
+#   k_py / k_dy — vertical PD    (k_dy >= 2*sqrt(k_py) for critical damping)
+#   k_ix / k_iy — integral gains (start at 0, increase to remove steady-state error)
+#
+# Middle loop (phi error → omega_des):
+#   k_phi — P gain, increase for faster attitude response
+#
+# Inner loop (omega error + delta damping → delta_cmd):
+#   k_omega — rate error gain
+#   k_delta — nozzle damping (prevents oscillation)
+# -----------------------------------------------------------------------------
+controller:
+  type: pid_cascade
+  x_d: 0.0
+
+  # Outer position loop
+  # Without theta_star_dot feedforward the attitude loop lags, so we need
+  # more aggressive altitude braking to keep final_speed reasonable.
+  k_px: 0.009
+  k_dx: 0.1
+  k_ix: 0.0     # integral of x-error; increase if steady-state x offset remains
+  k_py: 0.12
+  k_dy: 1.0
+  k_iy: 0.0     # integral of y-error; increase if altitude doesn't converge to 0
+
+  # Middle attitude loop — PI: k_phi (P), k_i_phi (I), D implicit via rate loop
+  k_phi: 0.4
+  k_i_phi: 0.01        # integral of phi error; start at 0, increase to kill steady-state offset
+  i_phi_max: 1.0       # anti-windup clamp for I_phi [rad·s]
+  omega_des_max: 0.5   # saturation on desired angular rate [rad/s]
+
+  # Inner rate / nozzle loop
+  k_omega: 0.001
+  k_delta: 0.001
+  tau_filter: 0.001

@@ -8,6 +8,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 from .controller import BacksteppingController
+from .pid_controller import PIDCascadeController
 from .system import (
     IDX_X, IDX_Y, IDX_VX, IDX_VY, IDX_PHI, IDX_OMEGA,
     IDX_DELTA, IDX_ALPHA2F, IDX_TS_DOT, IDX_A1_DOT,
@@ -26,11 +27,14 @@ class SimulationResult:
     config: Dict[str, Any]
 
 
-def build_controller(cfg: Dict) -> BacksteppingController:
+def build_controller(cfg: Dict):
     ctrl_type = cfg["controller"].get("type", "backstepping")
-    if ctrl_type != "backstepping":
-        raise ValueError(f"Only 'backstepping' supported; got '{ctrl_type}'")
-    return BacksteppingController.from_config(cfg)
+    if ctrl_type == "backstepping":
+        return BacksteppingController.from_config(cfg)
+    elif ctrl_type == "pid_cascade":
+        return PIDCascadeController.from_config(cfg)
+    else:
+        raise ValueError(f"Unknown controller type: {ctrl_type!r}")
 
 
 def build_initial_state(cfg: Dict) -> np.ndarray:
@@ -119,8 +123,9 @@ def simulate(cfg: Dict) -> SimulationResult:
     # Landing time from terminal event
     landing_time = float(sol.t_events[0][0]) if len(sol.t_events[0]) > 0 else None
 
+    ctrl_type = cfg["controller"].get("type", "backstepping")
     summary = {
-        "controller_type":    "backstepping",
+        "controller_type":    ctrl_type,
         "final_x":            float(state[-1, IDX_X]),
         "final_y":            float(state[-1, IDX_Y]),
         "final_vx":           float(state[-1, IDX_VX]),

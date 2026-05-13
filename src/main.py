@@ -25,7 +25,8 @@ def _run_single(cfg: dict, output_root: Path, animate: bool = False) -> None:
     save_preview_figure(result, figures_dir / "rocket_visualization_preview.png")
 
     if animate:
-        save_animation(result, animations_dir / "backstepping_landing.gif")
+        ctrl_type = cfg["controller"].get("type", "backstepping")
+        save_animation(result, animations_dir / f"{ctrl_type}_landing.gif")
 
     figures_dir.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(result.summary, indent=2), encoding="utf-8")
