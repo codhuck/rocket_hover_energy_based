@@ -17,8 +17,9 @@ rocket:
   C_x: 0.358
 mission:
   x_start: 0.0
-  h_target: 50.0
-  x_land: 0.0
+  x_mid: 40.0
+  h_target: 100.0
+  x_land: 80.0
   eps_h: 5.0
   eps_v: 4.0
   eps_land: 1.0

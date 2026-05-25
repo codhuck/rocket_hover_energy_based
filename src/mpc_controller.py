@@ -73,6 +73,7 @@ class MPCScales:
 @dataclass
 class MissionConfig:
     x_start: float = 0.0
+    x_mid: float = 40.0
     x_land: float = 80.0
     h_target: float = 120.0
     eps_h: float = 3.0
@@ -133,6 +134,7 @@ class MPCController:
         scales = MPCScales(**{k: float(v) for k, v in s_cfg.items() if hasattr(MPCScales, k)})
         mission = MissionConfig(
             x_start=float(m_cfg.get("x_start", m_cfg.get("xstart", 0.0))),
+            x_mid=float(m_cfg.get("x_mid", m_cfg.get("xmid", 40.0))),
             x_land=float(m_cfg.get("x_land", m_cfg.get("xland", 80.0))),
             h_target=float(m_cfg.get("h_target", m_cfg.get("htarget", 120.0))),
             eps_h=float(m_cfg.get("eps_h", 3.0)),
@@ -207,7 +209,20 @@ class MPCController:
     def _default_warm_start(self, state: np.ndarray, params: RocketParams) -> np.ndarray:
         U = np.zeros((self.N, 2), dtype=float)
         if self.phase == "ascent":
-            U[:, 0] = 0.0
+            x_err = self.mission.x_mid - float(state[IDX_X])
+            vx = float(state[IDX_VX])
+            theta = float(state[IDX_PHI])
+
+            steer = 0.0060 * x_err - 0.040 * vx - 0.40 * theta
+            steer = float(np.clip(steer, -0.20, 0.20))
+
+            split1 = max(1, self.N // 3)
+            split2 = max(split1 + 1, 2 * self.N // 3)
+
+            U[:split1, 0] = steer * params.delta_max_cmd
+            U[split1:split2, 0] = -0.35 * steer * params.delta_max_cmd
+            U[split2:, 0] = -0.12 * steer * params.delta_max_cmd
+
             U[:, 1] = np.clip(1.16 * params.F_hover, params.F_min, params.F_max)
             return U
 
@@ -239,12 +254,17 @@ class MPCController:
 
     def update_phase(self, state: np.ndarray) -> None:
         if self.phase == "ascent":
+            x = float(state[IDX_X])
             y = float(state[IDX_Y])
             vy = float(state[IDX_VY])
-            # Switch once the target height is reached or when close to it with a
-            # small vertical speed.  The descent target is then responsible for the
-            # landing point.
-            if (abs(y - self.mission.h_target) < self.mission.eps_h and abs(vy) < self.mission.eps_v) or y >= self.mission.h_target:
+
+            height_ok = y >= self.mission.h_target - self.mission.eps_h
+            vertical_ok = abs(vy) <= self.mission.eps_v or (
+                y >= self.mission.h_target and vy <= 0.0
+            )
+            x_ok = abs(x - self.mission.x_mid) <= self.mission.eps_x
+
+            if height_ok and vertical_ok and x_ok:
                 self.phase = "descent"
                 self.warm_u = None
 
@@ -281,8 +301,12 @@ class MPCController:
         target = np.zeros(STATE_DIM)
         p = np.zeros(STATE_DIM)
         if self.phase == "ascent":
+            target[IDX_X] = self.mission.x_mid
             target[IDX_Y] = self.mission.h_target
+
+            p[IDX_X] = self.weights.px
             p[IDX_Y] = self.weights.py
+            p[IDX_VX] = 0.0
             p[IDX_VY] = self.weights.pvy
             p[IDX_PHI] = self.weights.ptheta
             p[IDX_OMEGA] = self.weights.pomega
@@ -547,8 +571,77 @@ class MPCController:
         out[1] = float(np.clip(out[1], params.F_min, params.F_max))
         return out
 
+
+    def _apply_ascent_waypoint_assist(self, state: np.ndarray, params: RocketParams) -> np.ndarray:
+        x = float(state[IDX_X])
+        y = float(state[IDX_Y])
+        vx = float(state[IDX_VX])
+        vy = float(state[IDX_VY])
+        theta = wrap_angle(float(state[IDX_PHI]))
+        omega = float(state[IDX_OMEGA])
+        delta = float(state[IDX_DELTA])
+
+        x_err = self.mission.x_mid - x
+        y_err = self.mission.h_target - y
+
+        vx_des = float(np.clip(0.28 * x_err, -8.0, 8.0))
+
+        if abs(x_err) < 1.8 * self.mission.eps_x:
+            vx_des = float(np.clip(0.18 * x_err, -2.0, 2.0))
+
+        ax_cmd = float(np.clip(0.45 * (vx_des - vx), -2.3, 2.3))
+
+        if y_err > 0.0:
+            vy_des = float(np.clip(0.35 * y_err, 0.5, 10.0))
+        else:
+            vy_des = 0.0
+
+        ay_cmd = float(np.clip(0.65 * (vy_des - vy), -5.0, 5.0))
+
+        F_nom = params.mass * (params.g + ay_cmd)
+        denom = max(math.cos(theta) - delta * math.sin(theta), 0.55)
+        F_cmd = float(np.clip(F_nom / denom, params.F_min, params.F_max))
+
+        dcmd = params.mass * ax_cmd / max(F_cmd, 1.0) - 0.75 * theta - 0.30 * omega
+        dcmd = float(np.clip(dcmd, -params.delta_max_cmd, params.delta_max_cmd))
+
+        return np.array([dcmd, F_cmd], dtype=float)
+
+
     def compute_control(self, state: np.ndarray, params: RocketParams) -> Tuple[Dict[str, float], Dict]:
         self.update_phase(state)
+        if (
+            self.landing_assist
+            and self.phase == "ascent"
+            and abs(self.mission.x_mid - self.mission.x_start) > 1e-6
+        ):
+            u0 = self._apply_ascent_waypoint_assist(state, params)
+            aero = aero_forces_and_moment(np.asarray(state, dtype=float), params)
+            target, p = self._target_and_weights()
+            X_pred = self.predict(state, np.tile(u0, (self.N, 1)), params)
+
+            cache = {
+                "phase": self.phase,
+                "success": True,
+                "status": 0,
+                "message": "ascent waypoint assist",
+                "cost": 0.0,
+                "nit": 0,
+                "candidate_cost": 0.0,
+                "target": target,
+                "P_diag": p,
+                "predicted_state": X_pred,
+                "predicted_control": np.tile(u0, (self.N, 1)),
+                **aero,
+            }
+
+            self.last_cache = cache
+
+            return {
+                "delta_cmd": float(u0[0]),
+                "F": float(u0[1]),
+                "sigma": float(np.clip(u0[1] / max(params.F_max, 1e-9), 0.0, 1.0)),
+            }, cache
         if self.landing_assist and self.assist_override_descent and self.phase == "descent" and float(state[IDX_Y]) <= self.assist_altitude:
             u0 = self._apply_terminal_assist(np.array([0.0, params.F_hover], dtype=float), state, params)
             aero = aero_forces_and_moment(np.asarray(state, dtype=float), params)

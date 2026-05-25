@@ -29,7 +29,8 @@ rocket:
 
 mission:
   x_start: 0.0
-  h_target: 100.0           # ascent target height [m]
+  h_target: 100.0 
+  x_mid: 40.0        # новая целевая x-точка на верхней фазе      # ascent target height [m]
   x_land: 80.0              # landing x-coordinate [m]
   eps_h: 4.0                # ascent->descent height tolerance [m]
   eps_v: 2.5                # ascent->descent vertical velocity tolerance [m/s]
