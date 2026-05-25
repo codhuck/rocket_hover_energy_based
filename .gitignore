@@ -1,36 +1,5 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual environments
 .venv/
-venv/
-ENV/
-env/
-env.bak/
-venv.bak/
-
-# Distribution / packaging
-build/
-dist/
-*.egg-info/
-*.egg
-*.whl
-
-# Installer logs
-pip-log.txt
-
-# Unit test / coverage
-htmlcov/
-.coverage
-.tox/
-.nox/
-.pytest_cache/
-
-# Jupyter
-.ipynb_checkpoints
-
-# IDEs
-.vscode/
-.idea/
+__pycache__/
+*.pyc
+outputs/
+.DS_Store
