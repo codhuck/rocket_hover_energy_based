@@ -316,12 +316,21 @@ This is the key idea of the project: the trajectory is a result of optimization,
 During ascent, the target only fixes the altitude and selected stability-related components:
 
 $$
-s_{\mathrm{target,ascent}}
-=
-[*,\ h_{\mathrm{target}},\ *,\ 0,\ 0,\ 0,\ *]^T
+s_{\mathrm{target,ascent}} =
+\begin{bmatrix}
+\ast \\
+h_{\mathrm{target}} \\
+\ast \\
+0 \\
+0 \\
+0 \\
+\ast
+\end{bmatrix}
 $$
 
-The horizontal position, horizontal velocity, and nozzle state are intentionally left free by assigning zero terminal weights to those components.
+The symbols $\ast$ indicate components that are intentionally left free by assigning zero terminal weights.
+
+The horizontal position, horizontal velocity, and nozzle state are therefore not prescribed during ascent.
 
 This allows the optimizer to choose a convenient horizontal position at the top of the trajectory.
 
@@ -330,9 +339,16 @@ This allows the optimizer to choose a convenient horizontal position at the top 
 During descent, the landing target is fully specified:
 
 $$
-s_{\mathrm{target,descent}}
-=
-[x_{\mathrm{land}},\ 0,\ 0,\ 0,\ 0,\ 0,\ 0]^T
+s_{\mathrm{target,descent}} =
+\begin{bmatrix}
+x_{\mathrm{land}} \\
+0 \\
+0 \\
+0 \\
+0 \\
+0 \\
+0
+\end{bmatrix}
 $$
 
 The terminal weights in descent strongly penalize:
@@ -342,7 +358,6 @@ The terminal weights in descent strongly penalize:
 - vertical velocity,
 - pitch angle,
 - angular velocity.
-
 ---
 
 ## 7. Constraints
