@@ -1,6 +1,6 @@
 # Planar TVC Rocket — Model Predictive Control
 
-![MPC mission](outputs/mpc/animations/mpc_mission.gif)
+![MPC mission](outputs/mpc/animations/mpc_mission1.gif)
 
 ## Overview
 
