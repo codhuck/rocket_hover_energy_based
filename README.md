@@ -167,41 +167,61 @@ The rocket model uses a small-nozzle-deflection linearization.
 
 ### Translational Dynamics
 
-$$
-m\ddot x =
-F\sin\vartheta
-+
-F\delta\cos\vartheta
-+
-X_b\sin\vartheta
-+
-Y_b\cos\vartheta
-$$
+The horizontal and vertical translational dynamics are:
 
 $$
-m\ddot y =
+\begin{aligned}
+m\ddot{x} &=
+F\sin\vartheta
++ F\delta\cos\vartheta
++ X_b\sin\vartheta
++ Y_b\cos\vartheta ,
+\\[4pt]
+m\ddot{y} &=
 F\cos\vartheta
--
-mg
--
-F\delta\sin\vartheta
-+
-X_b\cos\vartheta
--
-Y_b\sin\vartheta
+- mg
+- F\delta\sin\vartheta
++ X_b\cos\vartheta
+- Y_b\sin\vartheta .
+\end{aligned}
+$$
+
+Equivalently, the accelerations can be written as:
+
+$$
+\begin{aligned}
+\ddot{x} &=
+\frac{
+F\sin\vartheta
++ F\delta\cos\vartheta
++ X_b\sin\vartheta
++ Y_b\cos\vartheta
+}{m},
+\\[4pt]
+\ddot{y} &=
+\frac{
+F\cos\vartheta
+- mg
+- F\delta\sin\vartheta
++ X_b\cos\vartheta
+- Y_b\sin\vartheta
+}{m}.
+\end{aligned}
 $$
 
 ### Rotational Dynamics
 
+The rotational dynamics are:
+
 $$
-J\ddot\vartheta =
+J\ddot{\vartheta} =
 F l_{cp}\delta + M_b
 $$
 
 or equivalently:
 
 $$
-\ddot\vartheta =
+\ddot{\vartheta} =
 \frac{F l_{cp}\delta + M_b}{J}
 $$
 
@@ -210,11 +230,12 @@ $$
 The nozzle actuator is modeled as a first-order system:
 
 $$
-\tau_\delta \dot\delta = -\delta + \delta_{\mathrm{cmd}}
+\tau_\delta \dot{\delta}
+=
+-\delta + \delta_{\mathrm{cmd}}
 $$
 
 The simulator integrates the nonlinear dynamics with an RK4 step.
-
 ---
 
 ## 4. Aerodynamic Model
