@@ -75,6 +75,7 @@ class MissionConfig:
     x_start: float = 0.0
     x_mid: float = 40.0
     x_land: float = 80.0
+    y_land: float = 0.0
     h_target: float = 120.0
     eps_h: float = 3.0
     eps_v: float = 2.0
@@ -136,6 +137,7 @@ class MPCController:
             x_start=float(m_cfg.get("x_start", m_cfg.get("xstart", 0.0))),
             x_mid=float(m_cfg.get("x_mid", m_cfg.get("xmid", 40.0))),
             x_land=float(m_cfg.get("x_land", m_cfg.get("xland", 80.0))),
+            y_land=float(m_cfg.get("y_land", m_cfg.get("yland", 0.0))),
             h_target=float(m_cfg.get("h_target", m_cfg.get("htarget", 120.0))),
             eps_h=float(m_cfg.get("eps_h", 3.0)),
             eps_v=float(m_cfg.get("eps_v", 2.0)),
@@ -247,8 +249,9 @@ class MPCController:
 
         # Vertical seed: brake if descending, otherwise descend gently.
         bias = 1.0 + 0.055 * max(-vy, 0.0) - 0.025 * max(vy, 0.0)
-        if float(state[IDX_Y]) < self.landing_zone:
-            bias += 0.020 * max(self.landing_zone - float(state[IDX_Y]), 0.0)
+        y_rel = float(state[IDX_Y]) - self.mission.y_land
+        if y_rel < self.landing_zone:
+            bias += 0.020 * max(self.landing_zone - y_rel, 0.0)
         U[:, 1] = np.clip(bias * params.F_hover, params.F_min, params.F_max)
         return U
 
@@ -275,8 +278,10 @@ class MPCController:
         omega = abs(float(state[IDX_OMEGA]))
         speed = math.hypot(vx, vy)
         x_err = abs(float(state[IDX_X]) - self.mission.x_land)
+        y_err = abs(float(state[IDX_Y]) - self.mission.y_land)
         return {
             "x_error": x_err,
+            "y_error": y_err,
             "vx_abs": abs(vx),
             "vy_abs": abs(vy),
             "speed": speed,
@@ -284,7 +289,7 @@ class MPCController:
             "omega_abs": omega,
             "success": (
                 self.phase == "descent"
-                and float(state[IDX_Y]) <= self.mission.eps_land
+                and y_err <= self.mission.eps_land
                 and x_err <= self.mission.eps_x
                 and abs(vx) <= self.mission.eps_vx
                 and abs(vy) <= self.mission.eps_vy
@@ -313,7 +318,7 @@ class MPCController:
             # x, vx, delta are intentionally free in ascent.
         else:
             target[IDX_X] = self.mission.x_land
-            target[IDX_Y] = 0.0
+            target[IDX_Y] = self.mission.y_land
             p[IDX_X] = self.weights.px
             p[IDX_Y] = self.weights.py
             p[IDX_VX] = self.weights.pvx
@@ -340,26 +345,31 @@ class MPCController:
     def _landing_soft_cost(self, state: np.ndarray) -> float:
         if self.phase != "descent":
             return 0.0
+
         y = float(state[IDX_Y])
+        y_rel = y - self.mission.y_land
         w = self.weights
-        zone = max(0.0, (self.landing_zone - y) / max(self.landing_zone, 1e-9))
+        zone = float(np.clip((self.landing_zone - y_rel) / max(self.landing_zone, 1e-9), 0.0, 1.0))
         if zone <= 0.0:
             return 0.0
 
         target = np.zeros(STATE_DIM)
         target[IDX_X] = self.mission.x_land
+        target[IDX_Y] = self.mission.y_land
         err = self._normalized_error(state, target)
-        # The closer the predicted vehicle is to the ground, the more it should
-        # resemble a landing state.  This is a soft landing constraint, not a
-        # full trajectory-tracking term.
+        # The closer the predicted vehicle is to the final point, the more it
+        # should resemble the requested terminal state.  For y_land=0 this is
+        # a normal landing constraint; for y_land>0 it becomes a hover/final-point
+        # constraint at a selected altitude.
         cost = w.near_ground * zone**2 * (
             0.9 * err[IDX_X] ** 2
+            + 0.6 * err[IDX_Y] ** 2
             + 0.9 * err[IDX_VX] ** 2
             + 1.2 * err[IDX_VY] ** 2
             + 1.0 * err[IDX_PHI] ** 2
             + 0.35 * err[IDX_OMEGA] ** 2
         )
-        if y <= self.mission.eps_land + 1.0:
+        if abs(y - self.mission.y_land) <= self.mission.eps_land + 1.0:
             cost += w.touchdown_x * err[IDX_X] ** 2
             cost += w.touchdown_v * (err[IDX_VX] ** 2 + err[IDX_VY] ** 2)
             cost += w.touchdown_theta * err[IDX_PHI] ** 2
@@ -405,9 +415,13 @@ class MPCController:
             cost += w.delta_limit * delta_violation**2
 
             cost += self._landing_soft_cost(s)
-            if self.phase == "descent" and float(s[IDX_Y]) <= self.mission.eps_land and not first_contact_cost_added:
-                # First predicted contact receives an extra touchdown quality
-                # penalty so the optimizer cannot ignore a bad early impact.
+            if (
+                self.phase == "descent"
+                and abs(float(s[IDX_Y]) - self.mission.y_land) <= self.mission.eps_land
+                and not first_contact_cost_added
+            ):
+                # First predicted arrival near the final altitude receives an
+                # extra terminal quality penalty.
                 cost += 2.0 * self._landing_soft_cost(s)
                 first_contact_cost_added = True
 
@@ -531,7 +545,8 @@ class MPCController:
         if (not self.landing_assist) or self.phase != "descent":
             return u0
         y = float(state[IDX_Y])
-        if y > self.assist_altitude:
+        y_rel = y - self.mission.y_land
+        if y_rel > self.assist_altitude:
             return u0
 
         x = float(state[IDX_X])
@@ -547,10 +562,13 @@ class MPCController:
         vx_des = float(np.clip(0.35 * x_err, -5.0, 5.0))
         ax_cmd = float(np.clip(0.55 * (vx_des - vx), -2.0, 2.0))
 
-        # Vertical guidance: descend quickly when high, but slow down as y -> 0.
-        vy_des = -float(np.clip(0.25 * max(y, 0.0), 0.30, 7.0))
+        # Vertical guidance: drive the rocket to the requested final altitude.
+        # If y_land=0 this behaves like landing guidance.  If y_land>0, the
+        # terminal point is an in-air hover target.
+        y_err = self.mission.y_land - y
+        vy_des = float(np.clip(0.30 * y_err, -7.0, 3.0))
         if abs(x_err) > 15.0:
-            # Do not drop too aggressively while still far from the pad.
+            # Do not descend too aggressively while still far from the target x.
             vy_des = max(vy_des, -2.0)
         ay_cmd = float(np.clip(1.20 * (vy_des - vy), -5.0, 5.0))
 
@@ -642,7 +660,12 @@ class MPCController:
                 "F": float(u0[1]),
                 "sigma": float(np.clip(u0[1] / max(params.F_max, 1e-9), 0.0, 1.0)),
             }, cache
-        if self.landing_assist and self.assist_override_descent and self.phase == "descent" and float(state[IDX_Y]) <= self.assist_altitude:
+        if (
+            self.landing_assist
+            and self.assist_override_descent
+            and self.phase == "descent"
+            and float(state[IDX_Y]) - self.mission.y_land <= self.assist_altitude
+        ):
             u0 = self._apply_terminal_assist(np.array([0.0, params.F_hover], dtype=float), state, params)
             aero = aero_forces_and_moment(np.asarray(state, dtype=float), params)
             target, p = self._target_and_weights()

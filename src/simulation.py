@@ -46,6 +46,7 @@ def build_controller(cfg: Dict) -> MPCController:
 def build_initial_state(cfg: Dict) -> np.ndarray:
     init = cfg.get("initial_state", {})
     mission = cfg.get("mission", {})
+
     state = np.zeros(STATE_DIM, dtype=float)
     state[IDX_X] = float(init.get("x", mission.get("x_start", 0.0)))
     state[IDX_Y] = float(init.get("y", 0.0))
@@ -63,6 +64,7 @@ def _append_cache(cache: Dict, derived_lists: Dict[str, List[float]]) -> None:
         if isinstance(value, np.ndarray):
             value = np.nan
         derived_lists.setdefault(key, []).append(float(value))
+
     derived_lists.setdefault("phase", []).append(0.0 if cache.get("phase") == "ascent" else 1.0)
     derived_lists.setdefault("solver_success", []).append(1.0 if cache.get("success", False) else 0.0)
 
@@ -85,7 +87,8 @@ def simulate(cfg: Dict) -> SimulationResult:
     phases: List[float] = []
     derived_lists: Dict[str, List[float]] = {}
 
-    landing_time = None
+    terminal_time = None
+    contact_time = None
 
     for k in range(max_steps):
         control, cache = controller.compute_control(state, params)
@@ -99,26 +102,28 @@ def simulate(cfg: Dict) -> SimulationResult:
 
         next_state = rk4_step(state, u, dt, params)
 
-        # Contact with the landing pad is terminal.  The previous prototype
-        # clamped y to zero and kept flying, which could hide a hard or tilted
-        # touchdown.  Now we stop and record whether the contact was acceptable.
+        # Physical ground contact remains terminal.  This prevents the simulator
+        # from hiding an impact by clamping y and continuing the flight.
         contact = controller.phase == "descent" and next_state[IDX_Y] <= 0.0
         if contact:
             next_state[IDX_Y] = 0.0
 
         state = next_state
         controller.update_phase(state)
-
         t_next = (k + 1) * dt
+
         t_values.append(t_next)
         states.append(state.copy())
 
-        if contact:
-            landing_time = t_next
+        # For y_land > 0 this can stop the mission at an in-air terminal point.
+        # For y_land = 0 it behaves as the original successful landing check.
+        if controller.mission_done(state):
+            terminal_time = t_next
             break
 
-        if controller.mission_done(state):
-            landing_time = t_next
+        if contact:
+            contact_time = t_next
+            terminal_time = t_next
             break
 
     # Duplicate the last command so every state sample has a command value.
@@ -127,7 +132,7 @@ def simulate(cfg: Dict) -> SimulationResult:
         thrust.append(thrust[-1])
         sigma.append(sigma[-1])
         phases.append(phases[-1])
-        # Add final-state aero diagnostics.
+
         final_aero = aero_forces_and_moment(state, params)
         final_cache = {**controller.last_cache, **final_aero}
         _append_cache(final_cache, derived_lists)
@@ -142,7 +147,6 @@ def simulate(cfg: Dict) -> SimulationResult:
     x_arr = np.vstack(states)
     speed = np.hypot(x_arr[:, IDX_VX], x_arr[:, IDX_VY])
 
-    # Convert derived lists to arrays and align lengths.
     derived = {key: np.asarray(value[: len(t)], dtype=float) for key, value in derived_lists.items()}
     derived["speed"] = speed
     derived["alpha_deg"] = np.degrees(derived.get("alpha", np.zeros_like(t)))
@@ -156,10 +160,12 @@ def simulate(cfg: Dict) -> SimulationResult:
     }
 
     tq = controller.touchdown_quality(x_arr[-1])
-    touchdown_success = bool(tq["success"])
-    if touchdown_success:
-        termination_reason = "successful_landing"
-    elif landing_time is not None and x_arr[-1, IDX_Y] <= controller.mission.eps_land:
+    terminal_success = bool(tq["success"])
+    final_target_is_ground = abs(controller.mission.y_land) <= 1e-9
+
+    if terminal_success:
+        termination_reason = "successful_landing" if final_target_is_ground else "successful_terminal_point"
+    elif contact_time is not None:
         termination_reason = "hard_or_off_target_landing"
     elif controller.phase == "ascent":
         termination_reason = "time_limit_before_descent"
@@ -169,7 +175,10 @@ def simulate(cfg: Dict) -> SimulationResult:
     summary: Dict[str, Any] = {
         "controller_type": "mpc",
         "termination_reason": termination_reason,
-        "touchdown_success": touchdown_success,
+        "touchdown_success": terminal_success,
+        "terminal_success": terminal_success,
+        "terminal_x_error": float(tq["x_error"]),
+        "terminal_y_error": float(tq.get("y_error", abs(x_arr[-1, IDX_Y] - controller.mission.y_land))),
         "landing_x_error": float(tq["x_error"]),
         "landing_vx_abs": float(tq["vx_abs"]),
         "landing_vy_abs": float(tq["vy_abs"]),
@@ -178,6 +187,8 @@ def simulate(cfg: Dict) -> SimulationResult:
         "final_phase": "descent" if controller.phase == "descent" else "ascent",
         "final_x": float(x_arr[-1, IDX_X]),
         "final_y": float(x_arr[-1, IDX_Y]),
+        "target_x": float(controller.mission.x_land),
+        "target_y": float(controller.mission.y_land),
         "final_vx": float(x_arr[-1, IDX_VX]),
         "final_vy": float(x_arr[-1, IDX_VY]),
         "final_phi_deg": float(np.degrees(x_arr[-1, IDX_PHI])),
@@ -188,9 +199,18 @@ def simulate(cfg: Dict) -> SimulationResult:
         "max_altitude": float(np.max(x_arr[:, IDX_Y])),
         "max_abs_phi_deg": float(np.max(np.abs(np.degrees(x_arr[:, IDX_PHI])))),
         "max_abs_delta_deg": float(np.max(np.abs(np.degrees(x_arr[:, IDX_DELTA])))),
-        "landing_time_s": landing_time,
+        "landing_time_s": terminal_time,
+        "terminal_time_s": terminal_time,
         "simulation_time": float(t[-1]),
         "solver_success_rate": float(np.mean(derived.get("solver_success", np.ones_like(t)))),
     }
 
-    return SimulationResult(t=t, state=x_arr, controls=controls, derived=derived, summary=summary, params=params, config=cfg)
+    return SimulationResult(
+        t=t,
+        state=x_arr,
+        controls=controls,
+        derived=derived,
+        summary=summary,
+        params=params,
+        config=cfg,
+    )
