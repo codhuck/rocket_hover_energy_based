@@ -4,31 +4,62 @@
 
 ## Overview
 
-This repository implements a **planar thrust-vector-controlled (TVC) rocket** controlled by a nonlinear **Model Predictive Controller (MPC)**.
+This repository implements a **planar thrust-vector-controlled (TVC) rocket** steered by a nonlinear **Model Predictive Controller (MPC)**.
 
-The goal is not to track a pre-defined reference trajectory. Instead, the rocket receives only mission-level objectives:
+### What is TVC?
 
-1. start from the ground,
-2. reach a target altitude,
-3. return and land softly at a specified horizontal landing point.
+Thrust-vector control means the rocket steers itself by tilting its engine nozzle. There are no aerodynamic control surfaces — attitude and trajectory are controlled entirely by redirecting the thrust vector. This makes TVC a common choice for rockets that must operate across a wide speed range, including near-zero velocity during landing.
 
-The trajectory between these points is generated automatically by the optimizer.
+### What is MPC?
 
-The control objective is:
+Model Predictive Control is an optimization-based control strategy. At every time step, the controller:
+
+1. takes the current rocket state as input,
+2. uses an internal model of the rocket dynamics to simulate possible future trajectories,
+3. finds the sequence of control inputs that minimizes a cost function over a finite prediction horizon,
+4. applies only the first control input, then repeats the process at the next step.
+
+This receding-horizon approach allows the controller to anticipate future behavior and respect constraints on actuators and states, without requiring a manually designed reference trajectory.
+
+### Mission
+
+The rocket is given only high-level mission objectives — no reference trajectory is prescribed:
+
+1. lift off from the ground,
+2. reach a target altitude $h_{\mathrm{target}}$,
+3. return and land softly at a specified horizontal coordinate $x_{\mathrm{land}}$.
+
+The full flight path is generated automatically by the optimizer as a result of solving the optimal control problem at each step.
+
+### Control Objective
+
+The mission is split into two sequential phases, each with its own target:
+
+**Ascent** — climb to the target altitude while stabilizing attitude and reducing vertical velocity:
 
 $$
-[x, y, \dot x, \dot y, \vartheta, \dot\vartheta, \delta]^T
-\rightarrow
-[x_{\mathrm{land}}, 0, 0, 0, 0, 0, 0]^T
+[x,\ y,\ \dot x,\ \dot y,\ \vartheta,\ \dot\vartheta,\ \delta]^T
+\;\longrightarrow\;
+[x_{\mathrm{land}}/2,\ h_{\mathrm{target}},\ \ast,\ 0,\ 0,\ 0,\ \ast]^T
 $$
 
-where the rocket is controlled by:
+**Descent** — translate to the landing site and touch down with near-zero velocity and near-vertical attitude:
 
 $$
-u = [\delta_{\mathrm{cmd}}, F]^T
+[x,\ y,\ \dot x,\ \dot y,\ \vartheta,\ \dot\vartheta,\ \delta]^T
+\;\longrightarrow\;
+[x_{\mathrm{land}},\ 0,\ 0,\ 0,\ 0,\ 0,\ 0]^T
 $$
 
-with $\delta_{\mathrm{cmd}}$ being the commanded nozzle deflection and $F$ the thrust magnitude.
+The symbol $\ast$ denotes state components that are left free during ascent (zero terminal weight assigned).
+
+Both phases are controlled using the same two inputs:
+
+$$
+u = [\delta_{\mathrm{cmd}},\ F]^T
+$$
+
+where $\delta_{\mathrm{cmd}}$ is the commanded nozzle deflection angle and $F$ is the thrust magnitude.
 
 ---
 
@@ -267,7 +298,7 @@ $$
 s_{k+1} = f_d(s_k, u_k)
 $$
 
-where $f_d$ is obtained by numerical integration of the nonlinear rocket dynamics.
+where $f_d$ is obtained by numerical integration of the nonlinear rocket dynamics using a 4th-order Runge–Kutta (RK4) scheme with fixed time step $\Delta t$.
 
 ### Cost Function
 
@@ -293,8 +324,39 @@ $$
 F_{\mathrm{hover}} = mg
 $$
 
-The stage cost penalizes control usage, while the terminal cost pulls the end of the prediction horizon toward the current phase target.
+**Arguments of the cost function:**
 
+| Symbol | Type | Meaning |
+|--------|------|---------|
+| $N$ | scalar | Prediction horizon length — number of discrete steps over which the optimizer plans ahead |
+| $k$ | scalar | Step index along the horizon, $k = 0, 1, \ldots, N-1$ |
+| $\delta_{\mathrm{cmd},k}$ | scalar | Commanded nozzle deflection at step $k$; penalized to keep nozzle excursions small |
+| $R_\delta$ | scalar | Positive weight on nozzle deflection; larger values reduce nozzle activity |
+| $F_k$ | scalar | Thrust magnitude at step $k$ |
+| $F_{\mathrm{hover}}$ | scalar | Hover thrust $mg$; the stage cost penalizes deviation from this reference, not from zero, so the optimizer is biased toward fuel-efficient flight rather than minimum thrust |
+| $R_F$ | scalar | Positive weight on thrust deviation from hover; larger values keep thrust close to $mg$ |
+| $s_N$ | $\mathbb{R}^7$ | Predicted state at the end of the horizon (step $N$) |
+| $s_{\mathrm{target}}$ | $\mathbb{R}^7$ | Target state for the current mission phase (see Section 6) |
+| $P$ | $\mathbb{R}^{7 \times 7}$ | Positive semi-definite terminal weight matrix; diagonal entries select which state components are penalized and with what strength |
+
+The **stage cost** (sum over $k$) penalizes control effort at every step along the horizon.
+
+The **terminal cost** (quadratic in $s_N - s_{\mathrm{target}}$) penalizes the deviation of the predicted final state from the mission target. Since only the terminal state is penalized — not intermediate states — the optimizer has freedom to choose any dynamically feasible path to reach the target, rather than tracking a fixed reference trajectory.
+
+> **Note:** The expression under the sum is not fixed — it can be adapted to the mission requirements. For example, a fuel-optimal mission may include $\sum F_k$ to directly minimize propellant consumption; a trajectory-tracking mission may add a state-error term $\|(s_k - s_{\mathrm{ref},k})\|_Q^2$ to follow a prescribed path at each step; a smooth-control mission may penalize control increments $\|\Delta u_k\|^2$ instead of absolute values. The current formulation uses pure control-effort penalization, which is appropriate for free-trajectory optimization where only the terminal target matters.
+### Influence of Weights on the Trajectory
+
+The weights $R_\delta$, $R_F$, and $P$ directly shape the trajectory that the optimizer produces. Their balance determines how aggressively the rocket pursues the target versus how conservatively it uses its actuators.
+
+| Weight | Effect when increased | Effect when decreased |
+|--------|----------------------|----------------------|
+| $R_\delta$ | Nozzle deflections become smaller and slower; attitude corrections are gentler, trajectory is smoother but may deviate more | Nozzle is used more freely; tighter attitude control, faster corrections |
+| $R_F$ | Thrust stays close to hover thrust $mg$; trajectory is more fuel-efficient but less aggressive | Thrust variations are larger; optimizer exploits full thrust range for faster target approach |
+| $P$ (diagonal entries) | Terminal state is pulled strongly toward the target; trajectory bends earlier to meet the endpoint | Optimizer treats the terminal target loosely; trajectory may end far from the desired state |
+
+The weights compete: a large $P$ drives the rocket toward the target, while large $R_\delta$ and $R_F$ resist the actuator effort needed to get there. The resulting trajectory is the optimizer's compromise between these conflicting objectives.
+
+In practice, tuning these weights is the primary way to adjust the flight profile — for example, increasing $P_{yy}$ (altitude weight) during ascent makes the rocket prioritize reaching $h_{\mathrm{target}}$ more directly, while increasing $R_F$ produces a more fuel-efficient arc.
 ### Why There Is No Tracking Trajectory
 
 The MPC does not penalize deviation from a full reference trajectory at every step.
@@ -305,7 +367,7 @@ This is the key idea of the project: the trajectory is a result of optimization,
 
 ---
 
-## 6. Mission Targets and Terminal Weights
+## 6. Mission Targets
 
 ### Ascent Phase
 
@@ -314,7 +376,7 @@ During ascent, the target only fixes the altitude and selected stability-related
 $$
 s_{\mathrm{target,ascent}} =
 \begin{bmatrix}
-\ast \\
+x_{land}/2 \\
 h_{\mathrm{target}} \\
 \ast \\
 0 \\
@@ -326,9 +388,6 @@ $$
 
 The symbols $\ast$ indicate components that are intentionally left free by assigning zero terminal weights.
 
-The horizontal position, horizontal velocity, and nozzle state are therefore not prescribed during ascent.
-
-This allows the optimizer to choose a convenient horizontal position at the top of the trajectory.
 
 ### Descent Phase
 
@@ -386,7 +445,13 @@ $$
 y \geq 0
 $$
 
+$$
+V \leq 50\ \mathrm{m/s}
+$$
+
 In the current implementation, control bounds are enforced directly by the optimizer, while some state limits are handled with soft penalties for numerical robustness.
+
+A key advantage of MPC is its natural ability to handle various types of phase constraints. Since MPC generates control actions by solving an optimization problem at each step, constraints on state and control variables — including phase-dependent limits and conditional bounds — are incorporated directly into the problem formulation, making them straightforward to enforce without requiring separate constraint-handling logic.
 
 ---
 
@@ -430,11 +495,28 @@ With this option disabled, the project runs a more purely MPC-based descent, but
 
 ### Mission Parameters
 
-| Parameter | Value |
-|----------|------:|
-| $x_{\mathrm{start}}$ | 0.0 m |
-| $x_{\mathrm{land}}$ | 80.0 m |
-| $h_{\mathrm{target}}$ | 100.0 m |
+The mission consists of three key waypoints:
+
+**Launch point** — initial position on the ground:
+
+| Parameter | Value | Description |
+|----------|------:|-------------|
+| $x_{\mathrm{start}}$ | 0.0 m | Horizontal launch position |
+| $y_{\mathrm{start}}$ | 0.0 m | Ground level |
+
+**Intermediate waypoint** — target apex reached at the end of the ascent phase:
+
+| Parameter | Value | Description |
+|----------|------:|-------------|
+| $x_{\mathrm{target}}$ | 500.0 m | Horizontal position at apex (midpoint between launch and landing) |
+| $y_{\mathrm{target}}$ | 1000.0 m | Target altitude $h_{\mathrm{target}}$ |
+
+**Landing point** — final destination reached at the end of the descent phase:
+
+| Parameter | Value | Description |
+|----------|------:|-------------|
+| $x_{\mathrm{land}}$ | 1000.0 m | Horizontal landing coordinate |
+| $y_{\mathrm{land}}$ | 0.0 m | Ground level |
 
 ### Physical Parameters
 
@@ -504,12 +586,6 @@ The rocket attitude returns close to vertical during the terminal landing phase.
 
 The plot shows thrust, nozzle command, and the active mission phase.
 
-### Aerodynamics
-
-![Aerodynamics](outputs/mpc/figures/aerodynamics.png)
-
-Aerodynamic forces and moment are evaluated along the trajectory and included in the plant dynamics.
-
 Detailed simulation metrics are saved to:
 
 ```text
@@ -541,13 +617,9 @@ This configuration is faster, but less accurate than the main MPC setup.
 ## 12. Possible Extensions
 
 - Replace the `scipy.optimize` single-shooting MPC with a full CasADi/IPOPT multiple-shooting NLP.
-- Add hard state constraints for attitude, altitude, and nozzle angle.
-- Add fuel-optimal cost terms such as $\sum F_k$ or $\sum F_k^2$.
 - Add obstacle avoidance and flight corridor constraints.
 - Extend the model to 3D motion with yaw, roll, and lateral thrust-vectoring.
 - Add wind disturbances and robustness tests.
-- Compare MPC against the original backstepping and PID controllers under identical mission conditions.
-
 ---
 
 ## 13. Notes on AI Use
