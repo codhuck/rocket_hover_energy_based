@@ -589,16 +589,18 @@ class MPCController:
 
 
     def _apply_terminal_assist(self, u0: np.ndarray, state: np.ndarray, params: RocketParams) -> np.ndarray:
-        """Terminal landing stabilizer used by the improved hybrid mode.
+        """Terminal guidance with horizontal braking, overshoot recovery and speed limiting.
 
-        The nonlinear MPC is still available and is used for the ascent phase.
-        In descent, the educational single-shooting MPC can be too myopic for a
-        clean touchdown, so this optional layer behaves like a terminal guidance
-        law: it regulates x, vx, y, vy, theta and omega to the landing state.
-        Set ``assist_override_descent: false`` in the config to run pure MPC.
+        This assist is intentionally more conservative than the basic terminal
+        guidance.  It starts far above the final point, reduces the allowed
+        horizontal velocity as the vehicle approaches the final altitude, and
+        actively brakes if the vehicle has already passed x_land.  This prevents
+        the common failure mode where the rocket overshoots the pad and then
+        slides along the ground at high speed.
         """
         if (not self.landing_assist) or self.phase != "descent":
             return u0
+
         y = float(state[IDX_Y])
         y_rel = y - self.mission.y_land
         if y_rel > self.assist_altitude:
@@ -610,36 +612,73 @@ class MPCController:
         theta = wrap_angle(float(state[IDX_PHI]))
         omega = float(state[IDX_OMEGA])
         delta = float(state[IDX_DELTA])
+
         x_err = self.mission.x_land - x
-
-        # Horizontal guidance: for the large mission, allow meaningful lateral
-        # motion but keep the desired velocity below v_max.
-        vmax = max(float(self.mission.v_max), 1.0)
-        vx_des = float(np.clip(0.25 * x_err, -0.60 * vmax, 0.60 * vmax))
-
-        # Vertical guidance: drive the rocket to the requested final altitude.
-        # If y_land=0 this behaves like landing guidance. If y_land>0, the
-        # terminal point is an in-air hover target.
         y_err = self.mission.y_land - y
-        vy_des = float(np.clip(0.25 * y_err, -0.70 * vmax, 0.30 * vmax))
 
-        if abs(x_err) > 80.0:
-            # Do not spend all velocity vertically while still far from target x.
-            vy_des = max(vy_des, -0.45 * vmax)
+        vmax = max(float(self.mission.v_max), 1.0)
 
-        vx_des, vy_des = self._limit_desired_velocity(vx_des, vy_des, fraction=0.88)
+        # near = 0 high above the final point, near = 1 close to the final point.
+        near = float(np.clip(1.0 - max(y_rel, 0.0) / max(self.assist_altitude, 1e-9), 0.0, 1.0))
 
-        ax_cmd = float(np.clip(0.70 * (vx_des - vx), -4.0, 4.0))
-        ay_cmd = float(np.clip(0.80 * (vy_des - vy), -6.0, 6.0))
+        # Far away from the final point the rocket may travel laterally, but as
+        # it approaches the final altitude the allowed lateral velocity shrinks.
+        vx_limit_far = min(0.32 * vmax, 16.0)
+        vx_limit_near = min(0.04 * vmax, 1.6)
+        vx_limit = (1.0 - near) * vx_limit_far + near * vx_limit_near
+
+        # Desired lateral velocity automatically changes sign after overshoot.
+        vx_des = float(np.clip(0.16 * x_err, -vx_limit, vx_limit))
+
+        # Strong damping around the final x-coordinate.
+        ax_cmd = 0.85 * (vx_des - vx)
+        if abs(x_err) < 60.0:
+            ax_cmd += -0.45 * vx
+        if abs(x_err) < 25.0:
+            ax_cmd += -0.75 * vx
+
+        # If x_err and vx have opposite signs, we are moving away from the target
+        # or have overshot it.  Brake more aggressively.
+        if x_err * vx < 0.0:
+            ax_cmd += -1.10 * vx
+
+        ax_cmd = float(np.clip(ax_cmd, -3.2, 3.2))
+
+        # Vertical guidance.  Do not drop too fast if the x-error is still large.
+        if y_rel > 250.0:
+            vy_des = -8.0
+        elif y_rel > 120.0:
+            vy_des = -5.0
+        elif y_rel > 50.0:
+            vy_des = -3.0
+        elif y_rel > 15.0:
+            vy_des = -1.4
+        else:
+            vy_des = -0.45
+
+        # For an in-air terminal point, or if the vehicle is below the requested
+        # final altitude, climb gently back toward y_land.
+        if y_err > 0.0:
+            vy_des = min(2.0, 0.35 * y_err)
+
+        # When the vehicle is still far from final x, keep descent slower so it
+        # has time to correct the horizontal error before contact.
+        if abs(x_err) > 120.0:
+            vy_des = max(vy_des, -2.0)
+        elif abs(x_err) > 60.0:
+            vy_des = max(vy_des, -3.0)
+
+        vy_des = float(np.clip(vy_des, -0.35 * vmax, 0.15 * vmax))
+        vx_des, vy_des = self._limit_desired_velocity(vx_des, vy_des, fraction=0.75)
+
+        ay_cmd = float(np.clip(1.25 * (vy_des - vy), -6.0, 6.0))
         ax_cmd, ay_cmd = self._apply_speed_governor(ax_cmd, ay_cmd, vx, vy)
 
-        # Convert acceleration requests to thrust and nozzle command.  The pitch
-        # damping terms are deliberately stronger than the lateral term near the
-        # ground so touchdown attitude remains close to vertical.
         F_nom = params.mass * (params.g + ay_cmd)
         denom = max(math.cos(theta) - delta * math.sin(theta), 0.50)
         F_assist = float(np.clip(F_nom / denom, params.F_min, params.F_max))
-        dcmd_assist = params.mass * ax_cmd / max(F_assist, 1.0) - 0.65 * theta - 0.25 * omega
+
+        dcmd_assist = params.mass * ax_cmd / max(F_assist, 1.0) - 0.78 * theta - 0.38 * omega
         dcmd_assist = float(np.clip(dcmd_assist, -params.delta_max_cmd, params.delta_max_cmd))
 
         blend = float(np.clip(self.assist_blend, 0.0, 1.0))

@@ -6,6 +6,9 @@
 #   final point:        (1000, 0)
 #   speed limit:        <= 50 m/s
 #
+# This configuration also starts terminal assist early enough to brake before
+# the final x-coordinate and prevent high-speed ground sliding.
+#
 # Usage:
 #   python -m src.main --config configs/mpc.yaml --output-root outputs/mpc --animate
 # =============================================================================
@@ -13,44 +16,45 @@
 rocket:
   g: 9.81
   rho: 1.225
-  mass: 13000.0
-  J_const: 318196.0
-  l_cp: 10.3
-  l: 18.0
-  S_mid: 4.5216
+  mass: 13000.0             # constant mass [kg]
+  J_const: 318196.0         # constant pitch inertia [kg*m^2]
+  l_cp: 10.3                # CoM-to-nozzle distance [m]
+  l: 18.0                   # reference rocket length [m]
+  S_mid: 4.5216             # reference cross-sectional area [m^2]
 
-  F_max: 191763.0
-  F_min: 15000.0
-  delta_max_deg: 15.0
-  delta_max_cmd_deg: 15.0
-  theta_max_deg: 45.0
-  tau_delta: 0.08
-  C_x: 0.358
+  F_max: 191763.0           # 1.5*m*g [N]
+  F_min: 15000.0            # minimum thrust [N]
+  delta_max_deg: 15.0       # physical nozzle deflection limit
+  delta_max_cmd_deg: 15.0   # commanded nozzle deflection limit
+  theta_max_deg: 45.0       # soft pitch-angle state constraint
+  tau_delta: 0.08           # first-order actuator time constant [s]
+  C_x: 0.358                # drag coefficient
 
 mission:
   x_start: 0.0
 
-  # Intermediate ascent target: (500, 1000)
+  # Intermediate target: (500, 1000)
   x_mid: 500.0
   h_target: 1000.0
 
-  # Final point: (1000, 0)
+  # Final target: (1000, 0)
   x_land: 1000.0
   y_land: 0.0
 
-  # Speed limit
+  # Soft speed limit used by MPC and assist velocity governor.
   v_max: 50.0
 
-  eps_h: 8.0
-  eps_v: 4.0
+  eps_h: 10.0               # ascent->descent height tolerance [m]
+  eps_v: 5.0                # ascent->descent vertical velocity tolerance [m/s]
 
-  eps_land: 1.0
-  eps_vel: 4.0
-  eps_x: 8.0
-  eps_vx: 2.5
-  eps_vy: 2.5
-  eps_theta_deg: 6.0
-  eps_omega_deg_s: 10.0
+  # Terminal success gates.
+  eps_land: 1.0             # final altitude tolerance [m]
+  eps_vel: 3.0              # total terminal speed tolerance [m/s]
+  eps_x: 8.0                # max horizontal terminal error [m]
+  eps_vx: 1.5               # max horizontal speed at final point [m/s]
+  eps_vy: 1.5               # max vertical speed at final point [m/s]
+  eps_theta_deg: 6.0        # max pitch angle at final point [deg]
+  eps_omega_deg_s: 10.0     # max pitch rate at final point [deg/s]
 
 initial_state:
   x: 0.0
@@ -63,63 +67,64 @@ initial_state:
 
 experiment:
   dt: 0.25
-  t_final: 160.0
+  t_final: 260.0
 
 controller:
   type: mpc
 
-  # Longer horizon is needed because the mission is much larger now.
-  N: 36
-  gimbal_blocks: 36
-  thrust_blocks: 12
-  control_blocks: 12
+  # 48 * 0.25 = 12 s prediction horizon.
+  N: 48
+  gimbal_blocks: 48
+  thrust_blocks: 16
+  control_blocks: 16
   dt: 0.25
 
-  max_iter: 36
+  max_iter: 40
   optimizer: coordinate
   search_passes: 2
   initial_step: 0.08
   ftol: 8.0e-4
 
-  landing_zone: 80.0
+  # Larger landing zone and earlier assist prevent the late hard x-correction.
+  landing_zone: 160.0
   landing_assist: true
-  assist_altitude: 180.0
+  assist_altitude: 350.0
   assist_blend: 1.0
   assist_override_descent: true
 
   weights:
-    R_delta: 0.12
-    R_F: 0.045
-    R_delta_rate: 0.045
-    R_F_rate: 0.020
+    R_delta: 0.14
+    R_F: 0.050
+    R_delta_rate: 0.060
+    R_F_rate: 0.025
 
-    px: 260.0
-    py: 850.0
-    pvx: 220.0
-    pvy: 120.0
-    ptheta: 260.0
-    pomega: 80.0
+    px: 320.0
+    py: 900.0
+    pvx: 300.0
+    pvy: 150.0
+    ptheta: 300.0
+    pomega: 100.0
     pdelta: 0.0
 
-    ground: 10000.0
-    theta_limit: 5000.0
-    delta_limit: 3000.0
+    ground: 12000.0
+    theta_limit: 6000.0
+    delta_limit: 3500.0
 
-    near_ground: 130.0
-    touchdown_x: 1300.0
-    touchdown_v: 900.0
-    touchdown_theta: 900.0
-    touchdown_omega: 180.0
+    near_ground: 180.0
+    touchdown_x: 2000.0
+    touchdown_v: 1400.0
+    touchdown_theta: 1000.0
+    touchdown_omega: 220.0
 
-    # New soft speed-limit penalty.
-    speed_limit: 12000.0
+    # Soft speed-limit penalty. Increase to 60000+ if max_speed still exceeds 50.
+    speed_limit: 40000.0
 
   scales:
     x: 1000.0
     y: 1000.0
     vx: 50.0
     vy: 50.0
-    theta: 0.2094395102
-    omega: 0.5235987756
-    delta: 0.2617993878
+    theta: 0.2094395102     # 12 deg [rad]
+    omega: 0.5235987756     # 30 deg/s [rad/s]
+    delta: 0.2617993878     # 15 deg [rad]
     F: 60000.0

@@ -166,7 +166,7 @@ def simulate(cfg: Dict) -> SimulationResult:
     if terminal_success:
         termination_reason = "successful_landing" if final_target_is_ground else "successful_terminal_point"
     elif contact_time is not None:
-        termination_reason = "hard_or_off_target_landing"
+        termination_reason = "failed_touchdown"
     elif controller.phase == "ascent":
         termination_reason = "time_limit_before_descent"
     else:
