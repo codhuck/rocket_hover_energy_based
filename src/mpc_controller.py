@@ -57,6 +57,10 @@ class MPCWeights:
     touchdown_theta: float = 180.0
     touchdown_omega: float = 45.0
 
+    # Soft speed-limit penalty. The controller also applies a velocity governor
+    # in the assist laws, because assist can bypass the MPC objective.
+    speed_limit: float = 12_000.0
+
 
 @dataclass
 class MPCScales:
@@ -77,6 +81,7 @@ class MissionConfig:
     x_land: float = 80.0
     y_land: float = 0.0
     h_target: float = 120.0
+    v_max: float = 50.0
     eps_h: float = 3.0
     eps_v: float = 2.0
     eps_land: float = 0.7
@@ -139,6 +144,7 @@ class MPCController:
             x_land=float(m_cfg.get("x_land", m_cfg.get("xland", 80.0))),
             y_land=float(m_cfg.get("y_land", m_cfg.get("yland", 0.0))),
             h_target=float(m_cfg.get("h_target", m_cfg.get("htarget", 120.0))),
+            v_max=float(m_cfg.get("v_max", 50.0)),
             eps_h=float(m_cfg.get("eps_h", 3.0)),
             eps_v=float(m_cfg.get("eps_v", 2.0)),
             eps_land=float(m_cfg.get("eps_land", 0.7)),
@@ -342,6 +348,50 @@ class MPCController:
         err[IDX_PHI] = wrap_angle(err[IDX_PHI])
         return err / scales
 
+    def _limit_desired_velocity(self, vx_des: float, vy_des: float, fraction: float = 0.88) -> tuple[float, float]:
+        """Limit the requested velocity vector to stay below the mission speed limit."""
+        vmax = max(float(self.mission.v_max), 1e-6)
+        limit = max(0.5, float(fraction) * vmax)
+        norm = math.hypot(float(vx_des), float(vy_des))
+        if norm > limit:
+            scale = limit / norm
+            vx_des *= scale
+            vy_des *= scale
+        return float(vx_des), float(vy_des)
+
+    def _apply_speed_governor(
+        self,
+        ax_cmd: float,
+        ay_cmd: float,
+        vx: float,
+        vy: float,
+    ) -> tuple[float, float]:
+        """Prevent assist guidance from accelerating along the velocity vector near v_max.
+
+        This is not a mathematically hard state constraint, but it makes the
+        hybrid assist layer respect the requested speed limit in practice.
+        """
+        vmax = max(float(self.mission.v_max), 1e-6)
+        speed = math.hypot(float(vx), float(vy))
+        if speed < 0.82 * vmax or speed < 1e-6:
+            return float(ax_cmd), float(ay_cmd)
+
+        ux = float(vx) / speed
+        uy = float(vy) / speed
+        along = float(ax_cmd) * ux + float(ay_cmd) * uy
+
+        # At 82% of v_max we still allow modest acceleration; at v_max the
+        # along-track acceleration must be non-positive; above v_max we brake.
+        margin = (vmax - speed) / vmax
+        allowed_along = float(np.clip(6.0 * margin, -5.0, 1.2))
+
+        if along > allowed_along:
+            excess = along - allowed_along
+            ax_cmd -= excess * ux
+            ay_cmd -= excess * uy
+
+        return float(ax_cmd), float(ay_cmd)
+
     def _landing_soft_cost(self, state: np.ndarray) -> float:
         if self.phase != "descent":
             return 0.0
@@ -408,6 +458,11 @@ class MPCController:
             y_violation = max(0.0, -float(s[IDX_Y])) / max(self.scales.y, 1e-9)
             theta_violation = max(0.0, abs(float(s[IDX_PHI])) - params.theta_max) / max(self.scales.theta, 1e-9)
             delta_violation = max(0.0, abs(float(s[IDX_DELTA])) - params.delta_max) / max(self.scales.delta, 1e-9)
+
+            speed = math.hypot(float(s[IDX_VX]), float(s[IDX_VY]))
+            speed_violation = max(0.0, speed - self.mission.v_max) / max(self.mission.v_max, 1e-9)
+            cost += w.speed_limit * speed_violation**2
+
             cost += w.ground * y_violation**2
             if y_violation > 0.0:
                 cost += 6.0 * w.ground * (float(s[IDX_VY]) / max(self.scales.vy, 1e-9)) ** 2
@@ -557,20 +612,26 @@ class MPCController:
         delta = float(state[IDX_DELTA])
         x_err = self.mission.x_land - x
 
-        # Horizontal guidance: choose a modest desired lateral velocity and use
-        # the gimbal for direct lateral acceleration, while damping pitch.
-        vx_des = float(np.clip(0.35 * x_err, -5.0, 5.0))
-        ax_cmd = float(np.clip(0.55 * (vx_des - vx), -2.0, 2.0))
+        # Horizontal guidance: for the large mission, allow meaningful lateral
+        # motion but keep the desired velocity below v_max.
+        vmax = max(float(self.mission.v_max), 1.0)
+        vx_des = float(np.clip(0.25 * x_err, -0.60 * vmax, 0.60 * vmax))
 
         # Vertical guidance: drive the rocket to the requested final altitude.
-        # If y_land=0 this behaves like landing guidance.  If y_land>0, the
+        # If y_land=0 this behaves like landing guidance. If y_land>0, the
         # terminal point is an in-air hover target.
         y_err = self.mission.y_land - y
-        vy_des = float(np.clip(0.30 * y_err, -7.0, 3.0))
-        if abs(x_err) > 15.0:
-            # Do not descend too aggressively while still far from the target x.
-            vy_des = max(vy_des, -2.0)
-        ay_cmd = float(np.clip(1.20 * (vy_des - vy), -5.0, 5.0))
+        vy_des = float(np.clip(0.25 * y_err, -0.70 * vmax, 0.30 * vmax))
+
+        if abs(x_err) > 80.0:
+            # Do not spend all velocity vertically while still far from target x.
+            vy_des = max(vy_des, -0.45 * vmax)
+
+        vx_des, vy_des = self._limit_desired_velocity(vx_des, vy_des, fraction=0.88)
+
+        ax_cmd = float(np.clip(0.70 * (vx_des - vx), -4.0, 4.0))
+        ay_cmd = float(np.clip(0.80 * (vy_des - vy), -6.0, 6.0))
+        ax_cmd, ay_cmd = self._apply_speed_governor(ax_cmd, ay_cmd, vx, vy)
 
         # Convert acceleration requests to thrust and nozzle command.  The pitch
         # damping terms are deliberately stronger than the lateral term near the
@@ -602,19 +663,22 @@ class MPCController:
         x_err = self.mission.x_mid - x
         y_err = self.mission.h_target - y
 
-        vx_des = float(np.clip(0.28 * x_err, -8.0, 8.0))
+        vmax = max(float(self.mission.v_max), 1.0)
 
+        vx_des = float(np.clip(0.22 * x_err, -0.55 * vmax, 0.55 * vmax))
         if abs(x_err) < 1.8 * self.mission.eps_x:
-            vx_des = float(np.clip(0.18 * x_err, -2.0, 2.0))
-
-        ax_cmd = float(np.clip(0.45 * (vx_des - vx), -2.3, 2.3))
+            vx_des = float(np.clip(0.12 * x_err, -0.25 * vmax, 0.25 * vmax))
 
         if y_err > 0.0:
-            vy_des = float(np.clip(0.35 * y_err, 0.5, 10.0))
+            vy_des = float(np.clip(0.28 * y_err, 0.5, 0.70 * vmax))
         else:
             vy_des = 0.0
 
-        ay_cmd = float(np.clip(0.65 * (vy_des - vy), -5.0, 5.0))
+        vx_des, vy_des = self._limit_desired_velocity(vx_des, vy_des, fraction=0.88)
+
+        ax_cmd = float(np.clip(0.55 * (vx_des - vx), -4.0, 4.0))
+        ay_cmd = float(np.clip(0.65 * (vy_des - vy), -6.0, 6.0))
+        ax_cmd, ay_cmd = self._apply_speed_governor(ax_cmd, ay_cmd, vx, vy)
 
         F_nom = params.mass * (params.g + ay_cmd)
         denom = max(math.cos(theta) - delta * math.sin(theta), 0.55)
