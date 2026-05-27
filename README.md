@@ -576,8 +576,6 @@ The velocity is reduced near touchdown, producing a soft landing profile.
 
 ### Velocity and aerodynamics quantities
 
-![Aerodynamics](### Position and Velocity
-
 ![Position and velocity](outputs/mpc/figures/aerodynamics.png)
 
 Here we can see that constraint on velocity works well and it does not cross the 50 m/s limit.  
