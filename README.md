@@ -574,6 +574,14 @@ The rocket ascends to the target altitude, transitions into descent, and lands n
 
 The velocity is reduced near touchdown, producing a soft landing profile.
 
+### Velocity and aerodynamics quantities
+
+![Aerodynamics](### Position and Velocity
+
+![Position and velocity](outputs/mpc/figures/aerodynamics.png)
+
+Here we can see that constraint on velocity works well and it does not cross the 50 m/s limit.  
+
 ### Attitude and Nozzle
 
 ![Attitude and nozzle](outputs/mpc/figures/attitude_and_gimbal.png)
