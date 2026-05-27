@@ -1,0 +1,88 @@
+# Faster settings for smoke tests.  This is not tuned for the best touchdown;
+# use configs/mpc.yaml for quality landing results.
+rocket:
+  g: 9.81
+  rho: 1.225
+  mass: 13000.0
+  J_const: 318196.0
+  l_cp: 10.3
+  l: 18.0
+  S_mid: 4.5216
+  F_max: 191763.0
+  F_min: 15000.0
+  delta_max_deg: 15.0
+  delta_max_cmd_deg: 15.0
+  theta_max_deg: 45.0
+  tau_delta: 0.08
+  C_x: 0.358
+mission:
+  x_start: 0.0
+  x_mid: 40.0
+  h_target: 100.0
+  x_land: 80.0
+  eps_h: 5.0
+  eps_v: 4.0
+  eps_land: 1.0
+  eps_vel: 4.0
+  eps_x: 8.0
+  eps_vx: 2.5
+  eps_vy: 2.5
+  eps_theta_deg: 8.0
+  eps_omega_deg_s: 15.0
+initial_state:
+  x: 0.0
+  y: 0.0
+  vx: 0.0
+  vy: 0.0
+  theta_deg: 0.0
+  omega_deg_s: 0.0
+  delta_deg: 0.0
+experiment:
+  dt: 0.30
+  t_final: 35.0
+controller:
+  type: mpc
+  N: 16
+  gimbal_blocks: 16
+  thrust_blocks: 6
+  control_blocks: 6
+  dt: 0.30
+  max_iter: 10
+  optimizer: coordinate
+  search_passes: 2
+  initial_step: 0.08
+  ftol: 1.0e-3
+  landing_zone: 20.0
+  landing_assist: true
+  assist_altitude: 100.0
+  assist_blend: 1.0
+  assist_override_descent: true
+  weights:
+    R_delta: 0.08
+    R_F: 0.04
+    R_delta_rate: 0.02
+    R_F_rate: 0.012
+    px: 80.0
+    py: 80.0
+    pvx: 70.0
+    pvy: 90.0
+    ptheta: 80.0
+    pomega: 20.0
+    pdelta: 0.0
+    ground: 8000.0
+    theta_limit: 3000.0
+    delta_limit: 2000.0
+    near_ground: 50.0
+    touchdown_x: 350.0
+    touchdown_v: 300.0
+    touchdown_theta: 250.0
+    touchdown_omega: 60.0
+  scales:
+    x: 50.0
+    y: 50.0
+    vx: 10.0
+    vy: 10.0
+    theta: 0.2094395102
+    omega: 0.5235987756
+    delta: 0.2617993878
+    F: 60000.0

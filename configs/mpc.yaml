@@ -1,0 +1,112 @@
+# =============================================================================
+# 2D TVC rocket mission controlled by nonlinear MPC
+#
+# This version supports a final point at a selected altitude:
+#   x_land: horizontal final coordinate
+#   y_land: final altitude. Set y_land: 0.0 for a normal ground landing.
+#
+# Usage:
+#   python -m src.main --config configs/mpc.yaml --output-root outputs/mpc --animate
+# =============================================================================
+
+rocket:
+  g: 9.81
+  rho: 1.225
+  mass: 13000.0             # constant mass [kg]
+  J_const: 318196.0         # constant pitch inertia [kg*m^2]
+  l_cp: 10.3                # CoM-to-nozzle distance [m]
+  l: 18.0                   # reference rocket length [m]
+  S_mid: 4.5216             # reference cross-sectional area [m^2]
+
+  F_max: 191763.0           # 1.5*m*g [N]
+  F_min: 15000.0            # minimum thrust [N]
+  delta_max_deg: 15.0       # physical nozzle deflection limit
+  delta_max_cmd_deg: 15.0   # commanded nozzle deflection limit
+  theta_max_deg: 45.0       # soft pitch-angle state constraint
+  tau_delta: 0.08           # first-order actuator time constant [s]
+  C_x: 0.358                # drag coefficient
+
+mission:
+  x_start: 0.0
+  h_target: 100.0
+  x_mid: 40.0               # x-position near the top of ascent
+  x_land: 80.0              # final x-coordinate [m]
+  y_land: 20.0              # final altitude [m]; use 0.0 for normal landing
+
+  eps_h: 4.0                # ascent->descent height tolerance [m]
+  eps_v: 2.5                # ascent->descent vertical velocity tolerance [m/s]
+
+  # Terminal success gates.
+  eps_land: 0.8             # final altitude tolerance [m]
+  eps_vel: 3.0              # total terminal speed tolerance [m/s]
+  eps_x: 5.0                # max horizontal terminal error [m]
+  eps_vx: 1.5               # max horizontal speed at final point [m/s]
+  eps_vy: 1.5               # max vertical speed at final point [m/s]
+  eps_theta_deg: 6.0        # max pitch angle at final point [deg]
+  eps_omega_deg_s: 10.0     # max pitch rate at final point [deg/s]
+
+initial_state:
+  x: 0.0
+  y: 0.0
+  vx: 0.0
+  vy: 0.0
+  theta_deg: 0.0
+  omega_deg_s: 0.0
+  delta_deg: 0.0
+
+experiment:
+  dt: 0.25
+  t_final: 55.0
+
+controller:
+  type: mpc
+  N: 24                     # horizon time = N*dt = 6.0 s
+  gimbal_blocks: 24
+  thrust_blocks: 8
+  control_blocks: 8
+  dt: 0.25
+  max_iter: 28
+  optimizer: coordinate
+  search_passes: 1
+  initial_step: 0.08
+  ftol: 8.0e-4
+
+  landing_zone: 22.0        # terminal soft constraints start within this distance above y_land
+  landing_assist: true
+  assist_altitude: 80.0     # terminal assist starts when y - y_land <= this value
+  assist_blend: 1.0
+  assist_override_descent: true
+
+  weights:
+    R_delta: 0.10
+    R_F: 0.040
+    R_delta_rate: 0.030
+    R_F_rate: 0.018
+
+    px: 180.0
+    py: 700.0
+    pvx: 150.0
+    pvy: 70.0
+    ptheta: 180.0
+    pomega: 50.0
+    pdelta: 0.0
+
+    ground: 10000.0
+    theta_limit: 4000.0
+    delta_limit: 2500.0
+
+    near_ground: 75.0
+    touchdown_x: 900.0
+    touchdown_v: 700.0
+    touchdown_theta: 700.0
+    touchdown_omega: 140.0
+
+  scales:
+    x: 80.0
+    y: 50.0
+    vx: 10.0
+    vy: 10.0
+    theta: 0.2094395102     # 12 deg [rad]
+    omega: 0.5235987756     # 30 deg/s [rad/s]
+    delta: 0.2617993878     # 15 deg [rad]
+    F: 60000.0
